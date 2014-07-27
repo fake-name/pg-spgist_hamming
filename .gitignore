@@ -1,0 +1,8 @@
+results/
+*.so
+tmp/
+*.o
+regression.diffs
+regression.out
+/sql/ extension_name =>--*
+!/sql/<%= extension_name =>--*--*.sql
