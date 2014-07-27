@@ -1,29 +1,350 @@
-#include "postgres.h"
-#include "fmgr.h"
-/*
- * You can include more files here if needed.
- * To use some types, you must include the
- * correct file here based on:
- * http://www.postgresql.org/docs/current/static/xfunc-c.html#XFUNC-C-TYPE-TABLE
+/*-------------------------------------------------------------------------
+ *
+ * spgist_hamming.c
+ *	  implementation of BK tree over hamming-distances between int64 values
+ *	  for SP-GiST
+ *
+ * Implements a Burkhard-Keller Tree index for the relevant column
+ *
+ * The indexed column is expected to contain INT64 values, where
+ * the value indexed on is based on the binary hamming distance between
+ * the various values.
+ *
+ * Pathlogical number of child-nodes for the inner tuple is 64 (e.g.
+ * the hamming distance from 0x0000000000000000 to 0xFFFFFFFFFFFFFFFF).
+ * Realistically, the actual child-nodes is likely to be considerably less
+ * Fortunately, we shouln't have to worry about page-size concerns, since
+ * the entire size of the data we have to store about each tuple is
+ * one 8-byte int.
+ *
+ *
+ *
+ *
+ *
+ * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ * Heavily modified by Connor Wolf.
+ *
+ * IDENTIFICATION
+ *			spgist_hamming.c
+ *
+ *-------------------------------------------------------------------------
  */
 
-PG_MODULE_MAGIC;
+#include "postgres.h"
 
-PG_FUNCTION_INFO_V1(spgist_hamming);
-Datum spgist_hamming(PG_FUNCTION_ARGS);
+#include "access/gist.h"		/* for RTree strategy numbers */
+#include "access/spgist.h"
+#include "catalog/pg_type.h"
+#include "utils/builtins.h"
+#include "utils/geo_decls.h"
+
+
+extern Datum spg_hm_config(PG_FUNCTION_ARGS);
+extern Datum spg_hm_choose(PG_FUNCTION_ARGS);
+extern Datum spg_hm_picksplit(PG_FUNCTION_ARGS);
+extern Datum spg_hm_inner_consistent(PG_FUNCTION_ARGS);
+extern Datum spg_hm_leaf_consistent(PG_FUNCTION_ARGS);
 
 Datum
-spgist_hamming(PG_FUNCTION_ARGS)
+spg_hm_config(PG_FUNCTION_ARGS)
 {
-	/*
-	 * This is an empty body and will return NULL
-	 *
-	 * You should remove this comment and type
-	 * cool code here!
-	 */
+	/* spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0); */
+	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	PG_RETURN_NULL();
+	cfg->prefixType = INT8OID;   // Store the complete hash at each node.
+	cfg->labelType = VOIDOID;	/* we don't need node labels */
+	cfg->canReturnData = true;
+	cfg->longValuesOK = false;
+	PG_RETURN_VOID();
+}
+
+static int
+getSide(double coord, bool isX, Point *tst)
+{
+	double		tstcoord = (isX) ? tst->x : tst->y;
+
+	if (coord == tstcoord)
+		return 0;
+	else if (coord > tstcoord)
+		return 1;
+	else
+		return -1;
+}
+
+Datum
+spg_hm_choose(PG_FUNCTION_ARGS)
+{
+	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
+	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
+	Point	   *inPoint = DatumGetPointP(in->datum);
+	double		coord;
+
+	if (in->allTheSame)
+		elog(ERROR, "allTheSame should not occur for BK trees");
+
+	Assert(in->hasPrefix);
+	coord = DatumGetFloat8(in->prefixDatum);
+
+	Assert(in->nNodes == 2);
+
+	out->resultType = spgMatchNode;
+	out->result.matchNode.nodeN =
+		(getSide(coord, in->level % 2, inPoint) > 0) ? 0 : 1;
+	out->result.matchNode.levelAdd = 1;
+	out->result.matchNode.restDatum = PointPGetDatum(inPoint);
+
+	PG_RETURN_VOID();
+}
+
+typedef struct SortedPoint
+{
+	Point	   *p;
+	int			i;
+} SortedPoint;
+
+static int
+x_cmp(const void *a, const void *b)
+{
+	SortedPoint *pa = (SortedPoint *) a;
+	SortedPoint *pb = (SortedPoint *) b;
+
+	if (pa->p->x == pb->p->x)
+		return 0;
+	return (pa->p->x > pb->p->x) ? 1 : -1;
+}
+
+static int
+y_cmp(const void *a, const void *b)
+{
+	SortedPoint *pa = (SortedPoint *) a;
+	SortedPoint *pb = (SortedPoint *) b;
+
+	if (pa->p->y == pb->p->y)
+		return 0;
+	return (pa->p->y > pb->p->y) ? 1 : -1;
 }
 
 
+Datum
+spg_hm_picksplit(PG_FUNCTION_ARGS)
+{
+	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
+	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
+	int			i;
+	int			middle;
+	SortedPoint *sorted;
+	double		coord;
 
+	sorted = palloc(sizeof(*sorted) * in->nTuples);
+	for (i = 0; i < in->nTuples; i++)
+	{
+		sorted[i].p = DatumGetPointP(in->datums[i]);
+		sorted[i].i = i;
+	}
+
+	qsort(sorted, in->nTuples, sizeof(*sorted),
+		  (in->level % 2) ? x_cmp : y_cmp);
+	middle = in->nTuples >> 1;
+	coord = (in->level % 2) ? sorted[middle].p->x : sorted[middle].p->y;
+
+	out->hasPrefix = true;
+	out->prefixDatum = Float8GetDatum(coord);
+
+	out->nNodes = 2;
+	out->nodeLabels = NULL;		/* we don't need node labels */
+
+	out->mapTuplesToNodes = palloc(sizeof(int) * in->nTuples);
+	out->leafTupleDatums = palloc(sizeof(Datum) * in->nTuples);
+
+	/*
+	 * Note: points that have coordinates exactly equal to coord may get
+	 * classified into either node, depending on where they happen to fall in
+	 * the sorted list.  This is okay as long as the inner_consistent function
+	 * descends into both sides for such cases.  This is better than the
+	 * alternative of trying to have an exact boundary, because it keeps the
+	 * tree balanced even when we have many instances of the same point value.
+	 * So we should never trigger the allTheSame logic.
+	 */
+	for (i = 0; i < in->nTuples; i++)
+	{
+		Point	   *p = sorted[i].p;
+		int			n = sorted[i].i;
+
+		out->mapTuplesToNodes[n] = (i < middle) ? 0 : 1;
+		out->leafTupleDatums[n] = PointPGetDatum(p);
+	}
+
+	PG_RETURN_VOID();
+}
+
+Datum
+spg_hm_inner_consistent(PG_FUNCTION_ARGS)
+{
+	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
+	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
+	double		coord;
+	int			which;
+	int			i;
+
+	Assert(in->hasPrefix);
+	coord = DatumGetFloat8(in->prefixDatum);
+
+	if (in->allTheSame)
+		elog(ERROR, "allTheSame should not occur for BK hamming trees");
+
+	Assert(in->nNodes == 2);
+
+	/* "which" is a bitmask of children that satisfy all constraints */
+	which = (1 << 1) | (1 << 2);
+
+	for (i = 0; i < in->nkeys; i++)
+	{
+		Point	   *query = DatumGetPointP(in->scankeys[i].sk_argument);
+		BOX		   *boxQuery;
+
+		switch (in->scankeys[i].sk_strategy)
+		{
+			case RTLeftStrategyNumber:
+				if ((in->level % 2) != 0 && FPlt(query->x, coord))
+					which &= (1 << 1);
+				break;
+			case RTRightStrategyNumber:
+				if ((in->level % 2) != 0 && FPgt(query->x, coord))
+					which &= (1 << 2);
+				break;
+			case RTSameStrategyNumber:
+				if ((in->level % 2) != 0)
+				{
+					if (FPlt(query->x, coord))
+						which &= (1 << 1);
+					else if (FPgt(query->x, coord))
+						which &= (1 << 2);
+				}
+				else
+				{
+					if (FPlt(query->y, coord))
+						which &= (1 << 1);
+					else if (FPgt(query->y, coord))
+						which &= (1 << 2);
+				}
+				break;
+			case RTBelowStrategyNumber:
+				if ((in->level % 2) == 0 && FPlt(query->y, coord))
+					which &= (1 << 1);
+				break;
+			case RTAboveStrategyNumber:
+				if ((in->level % 2) == 0 && FPgt(query->y, coord))
+					which &= (1 << 2);
+				break;
+			case RTContainedByStrategyNumber:
+
+				/*
+				 * For this operator, the query is a box not a point.  We
+				 * cheat to the extent of assuming that DatumGetPointP won't
+				 * do anything that would be bad for a pointer-to-box.
+				 */
+				boxQuery = DatumGetBoxP(in->scankeys[i].sk_argument);
+
+				if ((in->level % 2) != 0)
+				{
+					if (FPlt(boxQuery->high.x, coord))
+						which &= (1 << 1);
+					else if (FPgt(boxQuery->low.x, coord))
+						which &= (1 << 2);
+				}
+				else
+				{
+					if (FPlt(boxQuery->high.y, coord))
+						which &= (1 << 1);
+					else if (FPgt(boxQuery->low.y, coord))
+						which &= (1 << 2);
+				}
+				break;
+			default:
+				elog(ERROR, "unrecognized strategy number: %d",
+					 in->scankeys[i].sk_strategy);
+				break;
+		}
+
+		if (which == 0)
+			break;				/* no need to consider remaining conditions */
+	}
+
+	/* We must descend into the children identified by which */
+	out->nodeNumbers = (int *) palloc(sizeof(int) * 2);
+	out->nNodes = 0;
+	for (i = 1; i <= 2; i++)
+	{
+		if (which & (1 << i))
+			out->nodeNumbers[out->nNodes++] = i - 1;
+	}
+
+	/* Set up level increments, too */
+	out->levelAdds = (int *) palloc(sizeof(int) * 2);
+	out->levelAdds[0] = 1;
+	out->levelAdds[1] = 1;
+
+	PG_RETURN_VOID();
+}
+
+
+Datum
+spg_hm_leaf_consistent(PG_FUNCTION_ARGS)
+{
+	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
+	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
+	Point	   *datum = DatumGetPointP(in->leafDatum);
+	bool		res;
+	int			i;
+
+	/* all tests are exact */
+	out->recheck = false;
+
+	/* leafDatum is what it is... */
+	out->leafValue = in->leafDatum;
+
+	/* Perform the required comparison(s) */
+	res = true;
+	for (i = 0; i < in->nkeys; i++)
+	{
+		Point	   *query = DatumGetPointP(in->scankeys[i].sk_argument);
+
+		switch (in->scankeys[i].sk_strategy)
+		{
+			case RTLeftStrategyNumber:
+				res = SPTEST(point_left, datum, query);
+				break;
+			case RTRightStrategyNumber:
+				res = SPTEST(point_right, datum, query);
+				break;
+			case RTSameStrategyNumber:
+				res = SPTEST(point_eq, datum, query);
+				break;
+			case RTBelowStrategyNumber:
+				res = SPTEST(point_below, datum, query);
+				break;
+			case RTAboveStrategyNumber:
+				res = SPTEST(point_above, datum, query);
+				break;
+			case RTContainedByStrategyNumber:
+
+				/*
+				 * For this operator, the query is a box not a point.  We
+				 * cheat to the extent of assuming that DatumGetPointP won't
+				 * do anything that would be bad for a pointer-to-box.
+				 */
+				res = SPTEST(box_contain_pt, query, datum);
+				break;
+			default:
+				elog(ERROR, "unrecognized strategy number: %d",
+					 in->scankeys[i].sk_strategy);
+				break;
+		}
+
+		if (!res)
+			break;
+	}
+
+	PG_RETURN_BOOL(res);
+}
