@@ -1,7 +1,16 @@
 spgist_hamming
 ==============
 
-A long description
+This will, with any luck, eventually be a sp-GiST index implementation that allows 
+fast querying for items by hamming distance.
+
+The general idea is to use a VP-tree structure, which can share a lot of the underlying 
+implementation details with a k-d tree, for which there is already a sp-GiST 
+implementation. It *should* be possible to implement without deep understanding of 
+PostgreSQL, which is not something I have, currently.
+
+I also have *NO* idea what I'm doing.
+
 
 To build it, just do this:
 
@@ -76,5 +85,5 @@ The `spgist_hamming` data type has no dependencies other than PostgreSQL.
 Copyright and License
 ---------------------
 
-Copyright (c) 2014 The maintainer's name.
+Copyright (c) 2014 Fake Name.
 
