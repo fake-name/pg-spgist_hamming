@@ -1,0 +1,10 @@
+CREATE OR REPLACE FUNCTION
+  hello( TEXT )
+RETURNS
+  TEXT
+AS
+  'example.so', 'hello'
+LANGUAGE
+  C
+STRICT
+IMMUTABLE;

@@ -40,6 +40,9 @@
 #include "utils/geo_decls.h"
 
 
+#define SPTEST(f, x, y) \
+    DatumGetBool(DirectFunctionCall2(f, PointPGetDatum(x), PointPGetDatum(y)))
+
 extern Datum spg_hm_config(PG_FUNCTION_ARGS);
 extern Datum spg_hm_choose(PG_FUNCTION_ARGS);
 extern Datum spg_hm_picksplit(PG_FUNCTION_ARGS);
@@ -292,11 +295,11 @@ spg_hm_inner_consistent(PG_FUNCTION_ARGS)
 Datum
 spg_hm_leaf_consistent(PG_FUNCTION_ARGS)
 {
-	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
+	spgLeafConsistentIn  *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
-	Point	   *datum = DatumGetPointP(in->leafDatum);
-	bool		res;
-	int			i;
+	Point                *datum = DatumGetPointP(in->leafDatum);
+	bool                 res;
+	int                  i;
 
 	/* all tests are exact */
 	out->recheck = false;
