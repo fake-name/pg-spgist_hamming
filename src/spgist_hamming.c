@@ -40,8 +40,7 @@
 #include "utils/geo_decls.h"
 
 
-#define SPTEST(f, x, y) \
-    DatumGetBool(DirectFunctionCall2(f, PointPGetDatum(x), PointPGetDatum(y)))
+#define SPTEST(f, x, y) DatumGetBool(DirectFunctionCall2(f, PointPGetDatum(x), PointPGetDatum(y)))
 
 extern Datum spg_hm_config(PG_FUNCTION_ARGS);
 extern Datum spg_hm_choose(PG_FUNCTION_ARGS);
@@ -78,10 +77,10 @@ getSide(double coord, bool isX, Point *tst)
 Datum
 spg_hm_choose(PG_FUNCTION_ARGS)
 {
-	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
+	spgChooseIn  *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
-	Point	   *inPoint = DatumGetPointP(in->datum);
-	double		coord;
+	Point        *inPoint = DatumGetPointP(in->datum);
+	double       coord;
 
 	if (in->allTheSame)
 		elog(ERROR, "allTheSame should not occur for BK trees");
@@ -177,6 +176,9 @@ spg_hm_picksplit(PG_FUNCTION_ARGS)
 		out->mapTuplesToNodes[n] = (i < middle) ? 0 : 1;
 		out->leafTupleDatums[n] = PointPGetDatum(p);
 	}
+
+
+	elog( INFO, "LOLWAT?");
 
 	PG_RETURN_VOID();
 }
