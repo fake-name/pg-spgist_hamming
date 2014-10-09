@@ -1,9 +1,0 @@
-\set ECHO 0
--- You should write your tests
-SELECT spgist_hamming('test');
- spgist_hamming 
-----------------
- 
-(1 row)
-
-ROLLBACK;

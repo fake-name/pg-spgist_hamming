@@ -1,11 +1,4 @@
-results/
-*.so
-tmp/
-*.o
-regression.diffs
-regression.out
-/sql/ extension_name =>--*
-!/sql/<%= extension_name =>--*--*.sql
-/postgis-2.1.0/postgis-2.1.0
-/postgis-2.1.0.tar
-/postgis-2.1.0.tar.gz
+# Generated subdirectories
+/log/
+/results/
+/tmp_check/

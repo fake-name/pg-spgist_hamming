@@ -1,24 +1,17 @@
-EXTENSION    = spgist_hamming
-EXTVERSION   = $(shell grep default_version $(EXTENSION).control | sed -e "s/default_version[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
+# contrib/btree_gist/Makefile
 
-DATA         = $(filter-out $(wildcard sql/*--*.sql),$(wildcard sql/*.sql))
-DOCS         = $(wildcard doc/*.md)
-TESTS        = $(wildcard test/sql/*.sql)
-REGRESS      = $(patsubst test/sql/%.sql,%,$(TESTS))
-REGRESS_OPTS = --inputdir=test --load-language=plpgsql
-MODULES      = $(patsubst %.c,%,$(wildcard src/*.c))
-PG_CONFIG    = pg_config
-PG91         = $(shell $(PG_CONFIG) --version | grep -qE " 8\.| 9\.0" && echo no || echo yes)
+MODULE_big = btree_ham_gist
 
-ifeq ($(PG91),yes)
-all: sql/$(EXTENSION)--$(EXTVERSION).sql
+OBJS =  btree_ham_gist.o btree_ham_utils_num.o btree_ham_int8.o $(WIN32RES)
 
-sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).sql
-	cp $< $@
+EXTENSION = btree_ham_gist
+DATA = btree_ham_gist--1.0.sql btree_ham_gist--unpackaged--1.0.sql
+PGFILEDESC = "btree_ham_gist - B-tree equivalent GIST operator classes"
 
-DATA = $(wildcard sql/*--*.sql) sql/$(EXTENSION)--$(EXTVERSION).sql
-EXTRA_CLEAN = sql/$(EXTENSION)--$(EXTVERSION).sql
-endif
+REGRESS = init int8 not_equal
 
+SHLIB_LINK += $(filter -lm, $(LIBS))
+
+PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)

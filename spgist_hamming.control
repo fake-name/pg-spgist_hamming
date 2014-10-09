@@ -1,5 +1,0 @@
-# spgist_hamming extension
-comment = 'A short description'
-default_version = '0.0.1'
-module_pathname = '$libdir/spgist_hamming'
-relocatable = true
