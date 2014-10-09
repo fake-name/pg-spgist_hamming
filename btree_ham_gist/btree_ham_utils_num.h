@@ -48,7 +48,7 @@ typedef struct
 	bool		(*f_le) (const void *, const void *);	/* less or equal */
 	bool		(*f_lt) (const void *, const void *);	/* less than */
 	int			(*f_cmp) (const void *, const void *);	/* key compare function */
-	float8		(*f_dist) (const void *, const void *); /* key distance function */
+	int			(*f_dist) (const void *, const void *); /* key distance function */
 } gbtree_ninfo;
 
 
@@ -94,7 +94,7 @@ typedef struct
 	 (ivp)->month * (30.0 * SECS_PER_DAY))
 #endif
 
-#define GET_FLOAT_DISTANCE(t, arg1, arg2)	Abs( ((float8) *((const t *) (arg1))) - ((float8) *((const t *) (arg2))) )
+
 
 #define SAMESIGN(a,b)	(((a) < 0) == ((b) < 0))
 

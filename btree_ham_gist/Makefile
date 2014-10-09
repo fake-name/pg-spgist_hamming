@@ -8,7 +8,7 @@ EXTENSION = btree_ham_gist
 DATA = btree_ham_gist--1.0.sql btree_ham_gist--unpackaged--1.0.sql
 PGFILEDESC = "btree_ham_gist - B-tree equivalent GIST operator classes"
 
-REGRESS = init int8 	not_equal
+REGRESS = init int8 not_equal
 
 SHLIB_LINK += $(filter -lm, $(LIBS))
 

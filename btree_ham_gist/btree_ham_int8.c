@@ -67,10 +67,30 @@ gbt_int8key_cmp(const void *a, const void *b)
 	return (ia->lower > ib->lower) ? 1 : -1;
 }
 
-static float8
+
+
+int32 hamdist(int64 x, int64 y)
+{
+	int32 dist = 0;
+	int64 val = x ^ y; // XOR
+
+	// Count the number of set bits
+	while(val)
+	{
+		++dist;
+		val &= val - 1;
+	}
+
+	return dist;
+}
+
+static int32
 gbt_int8_dist(const void *a, const void *b)
 {
-	return GET_FLOAT_DISTANCE(int64, a, b);
+
+	return hamdist(*((const int64 *) (a)), *((const int64 *) (b)));
+
+
 }
 
 
@@ -95,19 +115,12 @@ int8_dist(PG_FUNCTION_ARGS)
 {
 	int64		a = PG_GETARG_INT64(0);
 	int64		b = PG_GETARG_INT64(1);
-	int64		r;
-	int64		ra;
 
-	r = a - b;
-	ra = Abs(r);
+	int32		ra;
 
-	/* Overflow check. */
-	if (ra < 0 || (!SAMESIGN(a, b) && !SAMESIGN(r, a)))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("bigint out of range")));
+	ra =  hamdist(a, b);
 
-	PG_RETURN_INT64(ra);
+	PG_RETURN_INT32(ra);
 }
 
 
