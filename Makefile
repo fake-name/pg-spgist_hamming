@@ -2,7 +2,7 @@
 
 MODULE_big = btree_ham_gist
 
-OBJS =  btree_ham_gist.o btree_ham_utils_num.o btree_ham_int8.o $(WIN32RES)
+OBJS =  btree_ham_gist.o btree_ham_utils_num.o $(WIN32RES)
 
 EXTENSION = btree_ham_gist
 DATA = btree_ham_gist--1.0.sql btree_ham_gist--unpackaged--1.0.sql
