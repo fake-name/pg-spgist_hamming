@@ -17,7 +17,7 @@ typedef char GBT_NUMKEY;
 typedef struct
 {
 	const GBT_NUMKEY *lower,
-			   *upper;
+	                 *upper;
 } GBT_NUMKEY_R;
 
 
@@ -58,62 +58,10 @@ typedef struct
 
 
 
-/*
- * Note: The factor 0.49 in following macro avoids floating point overflows
- */
-#define penalty_num(result,olower,oupper,nlower,nupper) do { \
-  double	tmp = 0.0F; \
-  (*(result))	= 0.0F; \
-  if ( (nupper) > (oupper) ) \
-	  tmp += ( ((double)nupper)*0.49F - ((double)oupper)*0.49F ); \
-  if (	(olower) > (nlower)  ) \
-	  tmp += ( ((double)olower)*0.49F - ((double)nlower)*0.49F ); \
-  if (tmp > 0.0F) \
-  { \
-	(*(result)) += FLT_MIN; \
-	(*(result)) += (float) ( ((double)(tmp)) / ( (double)(tmp) + ( ((double)(oupper))*0.49F - ((double)(olower))*0.49F ) ) ); \
-	(*(result)) *= (FLT_MAX / (((GISTENTRY *) PG_GETARG_POINTER(0))->rel->rd_att->natts + 1)); \
-  } \
-} while (0);
-
-
-/*
- * Convert an Interval to an approximate equivalent number of seconds
- * (as a double).  Here because we need it for time/timetz as well as
- * interval.  See interval_cmp_internal for comparison.
- */
-#ifdef HAVE_INT64_TIMESTAMP
-#define INTERVAL_TO_SEC(ivp) \
-	(((double) (ivp)->time) / ((double) USECS_PER_SEC) + \
-	 (ivp)->day * (24.0 * SECS_PER_HOUR) + \
-	 (ivp)->month * (30.0 * SECS_PER_DAY))
-#else
-#define INTERVAL_TO_SEC(ivp) \
-	((ivp)->time + \
-	 (ivp)->day * (24.0 * SECS_PER_HOUR) + \
-	 (ivp)->month * (30.0 * SECS_PER_DAY))
-#endif
 
 
 
 #define SAMESIGN(a,b)	(((a) < 0) == ((b) < 0))
-
-/*
- * check to see if a float4/8 val has underflowed or overflowed
- * borrowed from src/backend/utils/adt/float.c
- */
-#define CHECKFLOATVAL(val, inf_is_valid, zero_is_valid)			\
-do {															\
-	if (isinf(val) && !(inf_is_valid))							\
-		ereport(ERROR,											\
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),	\
-		  errmsg("value out of range: overflow")));				\
-																\
-	if ((val) == 0.0 && !(zero_is_valid))						\
-		ereport(ERROR,											\
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),	\
-		 errmsg("value out of range: underflow")));				\
-} while(0)
 
 
 extern Interval *abs_interval(Interval *a);

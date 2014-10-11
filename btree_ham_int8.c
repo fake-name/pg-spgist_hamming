@@ -56,13 +56,19 @@ gbt_int8key_cmp(const void *a, const void *b)
 	int64KEY   *ia = (int64KEY *) (((const Nsrt *) a)->t);
 	int64KEY   *ib = (int64KEY *) (((const Nsrt *) b)->t);
 
+	// elog(NOTICE, "gbt_int8key_cmp = %f, %f, %f, %f", ia->lower, ib->lower, ia->upper, ib->upper);
+
+
 	if (ia->lower == ib->lower)
 	{
 		if (ia->upper == ib->upper)
+		{
 			return 0;
+		}
 
 		return (ia->upper > ib->upper) ? 1 : -1;
 	}
+
 
 	return (ia->lower > ib->lower) ? 1 : -1;
 }
@@ -118,6 +124,7 @@ int8_dist(PG_FUNCTION_ARGS)
 
 	int32		ra;
 
+	elog(NOTICE, "int8_dist");
 	ra =  hamdist(a, b);
 
 	PG_RETURN_INT32(ra);
@@ -151,6 +158,9 @@ gbt_int8_consistent(PG_FUNCTION_ARGS)
 	int64KEY   *kkk = (int64KEY *) DatumGetPointer(entry->key);
 	GBT_NUMKEY_R key;
 
+
+	elog(NOTICE, "gbt_int8_consistent");
+
 	/* All cases served by this function are exact */
 	*recheck = false;
 
@@ -172,6 +182,8 @@ gbt_int8_distance(PG_FUNCTION_ARGS)
 	/* Oid		subtype = PG_GETARG_OID(3); */
 	int64KEY   *kkk = (int64KEY *) DatumGetPointer(entry->key);
 	GBT_NUMKEY_R key;
+
+	elog(NOTICE, "gbt_int8_distance");
 
 	key.lower = (GBT_NUMKEY *) &kkk->lower;
 	key.upper = (GBT_NUMKEY *) &kkk->upper;
@@ -200,7 +212,30 @@ gbt_int8_penalty(PG_FUNCTION_ARGS)
 	int64KEY   *newentry = (int64KEY *) DatumGetPointer(((GISTENTRY *) PG_GETARG_POINTER(1))->key);
 	float	   *result = (float *) PG_GETARG_POINTER(2);
 
-	penalty_num(result, origentry->lower, origentry->upper, newentry->lower, newentry->upper);
+
+	/*
+	 * Note: The factor 0.49 in following macro avoids floating point overflows
+	 */
+
+	double	tmp = 0.0F;
+	(*(result))	= 0.0F;
+	if ( (newentry->upper) > (origentry->upper) )
+	{
+		tmp += ( ((double)newentry->upper)*0.49F - ((double)origentry->upper)*0.49F );
+	}
+	if (	(origentry->lower) > (newentry->lower) )
+	{
+		tmp += ( ((double)origentry->lower)*0.49F - ((double)newentry->lower)*0.49F );
+	}
+	if (tmp > 0.0F)
+	{
+		(*(result)) += FLT_MIN;
+		(*(result)) += (float) ( ((double)(tmp)) / ( (double)(tmp) + ( ((double)(origentry->upper))*0.49F - ((double)(origentry->lower))*0.49F ) ) );
+		(*(result)) *= (FLT_MAX / (((GISTENTRY *) PG_GETARG_POINTER(0))->rel->rd_att->natts + 1));
+	}
+
+
+	// elog(NOTICE, "gbt_int8_penalty = %f", *result);
 
 	PG_RETURN_POINTER(result);
 }
@@ -208,6 +243,7 @@ gbt_int8_penalty(PG_FUNCTION_ARGS)
 Datum
 gbt_int8_picksplit(PG_FUNCTION_ARGS)
 {
+
 	PG_RETURN_POINTER(gbt_num_picksplit(
 									(GistEntryVector *) PG_GETARG_POINTER(0),
 									  (GIST_SPLITVEC *) PG_GETARG_POINTER(1),
@@ -218,6 +254,7 @@ gbt_int8_picksplit(PG_FUNCTION_ARGS)
 Datum
 gbt_int8_same(PG_FUNCTION_ARGS)
 {
+
 	int64KEY   *b1 = (int64KEY *) PG_GETARG_POINTER(0);
 	int64KEY   *b2 = (int64KEY *) PG_GETARG_POINTER(1);
 	bool	   *result = (bool *) PG_GETARG_POINTER(2);

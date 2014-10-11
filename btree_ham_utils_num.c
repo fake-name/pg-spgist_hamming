@@ -15,63 +15,17 @@ gbt_num_compress(GISTENTRY *retval, GISTENTRY *entry, const gbtree_ninfo *tinfo)
 {
 	if (entry->leafkey)
 	{
-		union
-		{
-			int16		i2;
-			int32		i4;
-			int64		i8;
-			float4		f4;
-			float8		f8;
-			DateADT		dt;
-			TimeADT		tm;
-			Timestamp	ts;
-			Cash		ch;
-		}			v;
+
+		int64 val;
 
 		GBT_NUMKEY *r = (GBT_NUMKEY *) palloc0(tinfo->indexsize);
 		void	   *leaf = NULL;
 
 		switch (tinfo->t)
 		{
-			case gbt_t_int2:
-				v.i2 = DatumGetInt16(entry->key);
-				leaf = &v.i2;
-				break;
-			case gbt_t_int4:
-				v.i4 = DatumGetInt32(entry->key);
-				leaf = &v.i4;
-				break;
 			case gbt_t_int8:
-				v.i8 = DatumGetInt64(entry->key);
-				leaf = &v.i8;
-				break;
-			case gbt_t_oid:
-				v.i4 = DatumGetObjectId(entry->key);
-				leaf = &v.i4;
-				break;
-			case gbt_t_float4:
-				v.f4 = DatumGetFloat4(entry->key);
-				leaf = &v.f4;
-				break;
-			case gbt_t_float8:
-				v.f8 = DatumGetFloat8(entry->key);
-				leaf = &v.f8;
-				break;
-			case gbt_t_date:
-				v.dt = DatumGetDateADT(entry->key);
-				leaf = &v.dt;
-				break;
-			case gbt_t_time:
-				v.tm = DatumGetTimeADT(entry->key);
-				leaf = &v.tm;
-				break;
-			case gbt_t_ts:
-				v.ts = DatumGetTimestamp(entry->key);
-				leaf = &v.ts;
-				break;
-			case gbt_t_cash:
-				v.ch = DatumGetCash(entry->key);
-				leaf = &v.ch;
+				val = DatumGetInt64(entry->key);
+				leaf = &val;
 				break;
 			default:
 				leaf = DatumGetPointer(entry->key);
@@ -147,11 +101,16 @@ gbt_num_same(const GBT_NUMKEY *a, const GBT_NUMKEY *b, const gbtree_ninfo *tinfo
 	b2.lower = &(((GBT_NUMKEY *) b)[0]);
 	b2.upper = &(((GBT_NUMKEY *) b)[tinfo->size]);
 
+
+
 	if (
 		(*tinfo->f_eq) (b1.lower, b2.lower) &&
 		(*tinfo->f_eq) (b1.upper, b2.upper)
 		)
+	{
 		return TRUE;
+	}
+
 	return FALSE;
 
 }
@@ -269,10 +228,11 @@ GIST_SPLITVEC *
 gbt_num_picksplit(const GistEntryVector *entryvec, GIST_SPLITVEC *v,
 				  const gbtree_ninfo *tinfo)
 {
-	OffsetNumber i,
-				maxoff = entryvec->n - 1;
+	OffsetNumber i;
+	OffsetNumber maxoff = entryvec->n - 1;
 	Nsrt	   *arr;
 	int			nbytes;
+
 
 	arr = (Nsrt *) palloc((maxoff + 1) * sizeof(Nsrt));
 	nbytes = (maxoff + 2) * sizeof(OffsetNumber);
@@ -285,11 +245,14 @@ gbt_num_picksplit(const GistEntryVector *entryvec, GIST_SPLITVEC *v,
 
 	/* Sort entries */
 
+	elog(NOTICE, "gbt_int8_picksplit. Size = %d", sizeof(Nsrt));
+
 	for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
 	{
 		arr[i].t = (GBT_NUMKEY *) DatumGetPointer((entryvec->vector[i].key));
 		arr[i].i = i;
 	}
+
 	qsort((void *) &arr[FirstOffsetNumber], maxoff - FirstOffsetNumber + 1, sizeof(Nsrt), tinfo->f_cmp);
 
 	/* We do simply create two parts */

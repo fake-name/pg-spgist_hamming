@@ -7,6 +7,8 @@
 #include "fmgr.h"
 #include "access/nbtree.h"
 
+
+// Wat? Magic number ahoy!
 #define BtreeGistNotEqualStrategyNumber 6
 
 /* indexed types */

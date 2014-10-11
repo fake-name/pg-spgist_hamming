@@ -23,7 +23,7 @@ INSERT INTO
 SELECT
   get_random_number(x'0000FFFFFFFFFFFF'::int8)
 FROM
-  generate_series(1,100000) i;
+  generate_series(1,1000) i;
 
-CREATE INDEX test_index ON testing USING gist (val);
+CREATE INDEX test_index ON testing USING gist (val gist_int8_ops);
 
