@@ -3,9 +3,7 @@
  */
 #include "postgres.h"
 
-#include "btree_ham_gist.h"
-#include "btree_ham_utils_num.h"
-#include "utils/builtins.h"
+#include "btree_gist.h"
 
 PG_MODULE_MAGIC;
 
@@ -28,6 +26,8 @@ gbtreekey_in(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(NULL);
 }
 
+#include "btree_utils_var.h"
+#include "utils/builtins.h"
 Datum
 gbtreekey_out(PG_FUNCTION_ARGS)
 {
@@ -47,5 +47,3 @@ gbt_decompress(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(PG_GETARG_POINTER(0));
 }
-
-
