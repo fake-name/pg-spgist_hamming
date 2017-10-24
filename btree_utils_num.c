@@ -5,9 +5,6 @@
 
 #include "btree_gist.h"
 #include "btree_utils_num.h"
-#include "utils/cash.h"
-#include "utils/date.h"
-#include "utils/timestamp.h"
 
 
 GISTENTRY *
@@ -19,15 +16,7 @@ gbt_num_compress(GISTENTRY *entry, const gbtree_ninfo *tinfo)
 	{
 		union
 		{
-			int16		i2;
-			int32		i4;
 			int64		i8;
-			float4		f4;
-			float8		f8;
-			DateADT		dt;
-			TimeADT		tm;
-			Timestamp	ts;
-			Cash		ch;
 		}			v;
 
 		GBT_NUMKEY *r = (GBT_NUMKEY *) palloc0(tinfo->indexsize);
@@ -35,46 +24,9 @@ gbt_num_compress(GISTENTRY *entry, const gbtree_ninfo *tinfo)
 
 		switch (tinfo->t)
 		{
-			case gbt_t_int2:
-				v.i2 = DatumGetInt16(entry->key);
-				leaf = &v.i2;
-				break;
-			case gbt_t_int4:
-				v.i4 = DatumGetInt32(entry->key);
-				leaf = &v.i4;
-				break;
 			case gbt_t_int8:
 				v.i8 = DatumGetInt64(entry->key);
 				leaf = &v.i8;
-				break;
-			case gbt_t_oid:
-			case gbt_t_enum:
-				v.i4 = DatumGetObjectId(entry->key);
-				leaf = &v.i4;
-				break;
-			case gbt_t_float4:
-				v.f4 = DatumGetFloat4(entry->key);
-				leaf = &v.f4;
-				break;
-			case gbt_t_float8:
-				v.f8 = DatumGetFloat8(entry->key);
-				leaf = &v.f8;
-				break;
-			case gbt_t_date:
-				v.dt = DatumGetDateADT(entry->key);
-				leaf = &v.dt;
-				break;
-			case gbt_t_time:
-				v.tm = DatumGetTimeADT(entry->key);
-				leaf = &v.tm;
-				break;
-			case gbt_t_ts:
-				v.ts = DatumGetTimestamp(entry->key);
-				leaf = &v.ts;
-				break;
-			case gbt_t_cash:
-				v.ch = DatumGetCash(entry->key);
-				leaf = &v.ch;
 				break;
 			default:
 				leaf = DatumGetPointer(entry->key);
@@ -113,36 +65,8 @@ gbt_num_fetch(GISTENTRY *entry, const gbtree_ninfo *tinfo)
 	 */
 	switch (tinfo->t)
 	{
-		case gbt_t_int2:
-			datum = Int16GetDatum(*(int16 *) entry->key);
-			break;
-		case gbt_t_int4:
-			datum = Int32GetDatum(*(int32 *) entry->key);
-			break;
 		case gbt_t_int8:
 			datum = Int64GetDatum(*(int64 *) entry->key);
-			break;
-		case gbt_t_oid:
-		case gbt_t_enum:
-			datum = ObjectIdGetDatum(*(Oid *) entry->key);
-			break;
-		case gbt_t_float4:
-			datum = Float4GetDatum(*(float4 *) entry->key);
-			break;
-		case gbt_t_float8:
-			datum = Float8GetDatum(*(float8 *) entry->key);
-			break;
-		case gbt_t_date:
-			datum = DateADTGetDatum(*(DateADT *) entry->key);
-			break;
-		case gbt_t_time:
-			datum = TimeADTGetDatum(*(TimeADT *) entry->key);
-			break;
-		case gbt_t_ts:
-			datum = TimestampGetDatum(*(Timestamp *) entry->key);
-			break;
-		case gbt_t_cash:
-			datum = CashGetDatum(*(Cash *) entry->key);
 			break;
 		default:
 			datum = PointerGetDatum(entry->key);

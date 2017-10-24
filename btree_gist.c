@@ -26,7 +26,7 @@ gbtreekey_in(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(NULL);
 }
 
-#include "btree_utils_var.h"
+// #include "btree_utils_var.h"
 #include "utils/builtins.h"
 Datum
 gbtreekey_out(PG_FUNCTION_ARGS)
