@@ -1,4 +1,4 @@
-CREATE EXTENSION btree_gist;
+CREATE EXTENSION pg_gist_hamming;
 
 -- Check whether any of our opclasses fail amvalidate
 SELECT amname, opcname

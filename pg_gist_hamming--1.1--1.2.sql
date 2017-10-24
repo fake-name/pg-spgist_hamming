@@ -1,7 +1,7 @@
-/* contrib/btree_gist/btree_gist--1.1--1.2.sql */
+/* contrib/pg_gist_hamming/pg_gist_hamming--1.1--1.2.sql */
 
 -- complain if script is sourced in psql, rather than via ALTER EXTENSION
-\echo Use "ALTER EXTENSION btree_gist UPDATE TO '1.2'" to load this file. \quit
+\echo Use "ALTER EXTENSION pg_gist_hamming UPDATE TO '1.2'" to load this file. \quit
 
 -- Update procedure signatures the hard way.
 -- We use to_regprocedure() so that query doesn't fail if run against 9.6beta1 definitions,

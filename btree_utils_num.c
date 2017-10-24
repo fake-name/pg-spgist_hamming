@@ -314,7 +314,7 @@ gbt_num_distance(const GBT_NUMKEY_R *key,
 	float8		retval;
 
 	if (tinfo->f_dist == NULL)
-		elog(ERROR, "KNN search is not supported for btree_gist type %d",
+		elog(ERROR, "KNN search is not supported for pg_gist_hamming type %d",
 			 (int) tinfo->t);
 	if (tinfo->f_le(query, key->lower, flinfo))
 		retval = tinfo->f_dist(query, key->lower, flinfo);

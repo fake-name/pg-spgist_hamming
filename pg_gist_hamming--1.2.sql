@@ -1,7 +1,7 @@
-/* contrib/btree_gist/btree_gist--1.2.sql */
+/* contrib/pg_gist_hamming/pg_gist_hamming--1.2.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION btree_gist" to load this file. \quit
+\echo Use "CREATE EXTENSION pg_gist_hamming" to load this file. \quit
 
 CREATE FUNCTION gbtreekey4_in(cstring)
 RETURNS gbtreekey4

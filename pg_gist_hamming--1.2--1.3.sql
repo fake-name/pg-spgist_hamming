@@ -1,7 +1,7 @@
-/* contrib/btree_gist/btree_gist--1.2--1.3.sql */
+/* contrib/pg_gist_hamming/pg_gist_hamming--1.2--1.3.sql */
 
 -- complain if script is sourced in psql, rather than via ALTER EXTENSION
-\echo Use "ALTER EXTENSION btree_gist UPDATE TO '1.3'" to load this file. \quit
+\echo Use "ALTER EXTENSION pg_gist_hamming UPDATE TO '1.3'" to load this file. \quit
 
 -- Add support for indexing UUID columns
 
@@ -59,7 +59,7 @@ AS
 	FUNCTION	7	gbt_uuid_same (gbtreekey32, gbtreekey32, internal),
 	STORAGE		gbtreekey32;
 
--- These are "loose" in the opfamily for consistency with the rest of btree_gist
+-- These are "loose" in the opfamily for consistency with the rest of pg_gist_hamming
 ALTER OPERATOR FAMILY gist_uuid_ops USING gist ADD
 	OPERATOR	6	<>  (uuid, uuid) ,
 	FUNCTION	9 (uuid, uuid) gbt_uuid_fetch (internal) ;
