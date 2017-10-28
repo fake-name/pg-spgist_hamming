@@ -23,7 +23,7 @@ DATA = \
 
 PGFILEDESC = "pg_gist_hamming - B-tree equivalent GiST operator classes"
 
-REGRESS = init int8
+REGRESS = init int8 int8_2 # not_equal
 
 SHLIB_LINK += $(filter -lm, $(LIBS))
 
