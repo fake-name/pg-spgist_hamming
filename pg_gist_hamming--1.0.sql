@@ -177,3 +177,6 @@ ALTER OPERATOR FAMILY gist_int8_ops USING gist ADD
 	OPERATOR	15	<-> (int8, int8) FOR ORDER BY pg_catalog.integer_ops ,
 	FUNCTION	8 (int8, int8) gbt_int8_distance (internal, int8, int2, oid, internal) ,
 	FUNCTION	9 (int8, int8) gbt_int8_fetch (internal) ;
+
+
+

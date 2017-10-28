@@ -10,9 +10,18 @@ OBJS =  btree_gist.o      \
 # 		btree_utils_var.o \
 
 EXTENSION = pg_gist_hamming
-DATA = pg_gist_hamming--unpackaged--1.0.sql pg_gist_hamming--1.0--1.1.sql \
-	   pg_gist_hamming--1.1--1.2.sql pg_gist_hamming--1.2.sql pg_gist_hamming--1.2--1.3.sql \
-	   pg_gist_hamming--1.3--1.4.sql pg_gist_hamming--1.4--1.5.sql
+
+DATA = \
+	pg_gist_hamming--1.0.sql
+
+	# pg_gist_hamming--1.2--1.3.sql           \
+	# pg_gist_hamming--1.3--1.4.sql           \
+	# pg_gist_hamming--1.4--1.5.sql
+	# pg_gist_hamming--unpackaged--1.0.sql \
+	# pg_gist_hamming--1.0--1.1.sql           \
+	# pg_gist_hamming--1.1--1.2.sql           \
+
+
 PGFILEDESC = "pg_gist_hamming - B-tree equivalent GiST operator classes"
 
 REGRESS = init int8
