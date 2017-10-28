@@ -7,6 +7,7 @@
 #include "btree_utils_num.h"
 
 
+
 GISTENTRY *
 gbt_num_compress(GISTENTRY *entry, const gbtree_ninfo *tinfo)
 {
@@ -14,23 +15,13 @@ gbt_num_compress(GISTENTRY *entry, const gbtree_ninfo *tinfo)
 
 	if (entry->leafkey)
 	{
-		union
-		{
-			int64		i8;
-		}			v;
+		int64 v;
 
 		GBT_NUMKEY *r = (GBT_NUMKEY *) palloc0(tinfo->indexsize);
 		void	   *leaf = NULL;
 
-		switch (tinfo->t)
-		{
-			case gbt_t_int8:
-				v.i8 = DatumGetInt64(entry->key);
-				leaf = &v.i8;
-				break;
-			default:
-				leaf = DatumGetPointer(entry->key);
-		}
+		v = DatumGetInt64(entry->key);
+		leaf = &v;
 
 		Assert(tinfo->indexsize >= 2 * tinfo->size);
 
@@ -63,14 +54,9 @@ gbt_num_fetch(GISTENTRY *entry, const gbtree_ninfo *tinfo)
 	 * lower and upper bound are the same. We just grab the lower bound and
 	 * return it.
 	 */
-	switch (tinfo->t)
-	{
-		case gbt_t_int8:
-			datum = Int64GetDatum(*(int64 *) entry->key);
-			break;
-		default:
-			datum = PointerGetDatum(entry->key);
-	}
+
+	datum = Int64GetDatum(*(int64 *) entry->key);
+
 
 	retval = palloc(sizeof(GISTENTRY));
 	gistentryinit(*retval, datum, entry->rel, entry->page, entry->offset,
@@ -237,9 +223,6 @@ gbt_num_distance(const GBT_NUMKEY_R *key,
 {
 	float8		retval;
 
-	if (tinfo->f_dist == NULL)
-		elog(ERROR, "KNN search is not supported for pg_gist_hamming type %d",
-			 (int) tinfo->t);
 	if (tinfo->f_le(query, key->lower, flinfo))
 		retval = tinfo->f_dist(query, key->lower, flinfo);
 	else if (tinfo->f_ge(query, key->upper, flinfo))

@@ -11,9 +11,4 @@
 
 /* indexed types */
 
-enum gbtree_type
-{
-	gbt_t_int8
-};
-
 #endif

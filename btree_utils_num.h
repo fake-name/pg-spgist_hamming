@@ -16,8 +16,7 @@ typedef char GBT_NUMKEY;
 /* Better readable key */
 typedef struct
 {
-	const GBT_NUMKEY *lower,
-			   *upper;
+	const GBT_NUMKEY *lower, *upper;
 } GBT_NUMKEY_R;
 
 
@@ -36,7 +35,6 @@ typedef struct
 
 	/* Attribs */
 
-	enum gbtree_type t;			/* data type */
 	int32		size;			/* size of type, 0 means variable */
 	int32		indexsize;		/* size of datums stored in index */
 
@@ -56,36 +54,6 @@ typedef struct
  *	Numeric btree functions
  */
 
-
-
-/*
- * Note: The factor 0.49 in following macro avoids floating point overflows
- */
-#define penalty_num(result,olower,oupper,nlower,nupper) do { \
-  double	tmp = 0.0F; \
-  (*(result))	= 0.0F; \
-  if ( (nupper) > (oupper) ) \
-	  tmp += ( ((double)nupper)*0.49F - ((double)oupper)*0.49F ); \
-  if (	(olower) > (nlower)  ) \
-	  tmp += ( ((double)olower)*0.49F - ((double)nlower)*0.49F ); \
-  if (tmp > 0.0F) \
-  { \
-	(*(result)) += FLT_MIN; \
-	(*(result)) += (float) ( ((double)(tmp)) / ( (double)(tmp) + ( ((double)(oupper))*0.49F - ((double)(olower))*0.49F ) ) ); \
-	(*(result)) *= (FLT_MAX / (((GISTENTRY *) PG_GETARG_POINTER(0))->rel->rd_att->natts + 1)); \
-  } \
-} while (0);
-
-
-/*
- * Convert an Interval to an approximate equivalent number of seconds
- * (as a double).  Here because we need it for time/timetz as well as
- * interval.  See interval_cmp_internal for comparison.
- */
-#define INTERVAL_TO_SEC(ivp) \
-	(((double) (ivp)->time) / ((double) USECS_PER_SEC) + \
-	 (ivp)->day * (24.0 * SECS_PER_HOUR) + \
-	 (ivp)->month * (30.0 * SECS_PER_DAY))
 
 #define GET_FLOAT_DISTANCE(t, arg1, arg2)	Abs( ((float8) *((const t *) (arg1))) - ((float8) *((const t *) (arg2))) )
 
