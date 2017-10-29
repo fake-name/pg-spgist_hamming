@@ -92,6 +92,8 @@ CREATE TYPE gbtreekey_var (
 
 --distance operators
 
+
+
 CREATE FUNCTION int8_dist(int8, int8)
 RETURNS int8
 AS 'MODULE_PATHNAME'
@@ -102,6 +104,19 @@ CREATE OPERATOR <-> (
 	RIGHTARG = int8,
 	PROCEDURE = int8_dist,
 	COMMUTATOR = '<->'
+);
+
+
+CREATE FUNCTION gbt_int8_hamming_distance(int8, int8)
+RETURNS int8
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR <=> (
+	LEFTARG = int8,
+	RIGHTARG = int8,
+	PROCEDURE = gbt_int8_hamming_distance,
+	COMMUTATOR = '<=>'
 );
 
 
@@ -153,6 +168,8 @@ CREATE FUNCTION gbt_int8_same(gbtreekey16, gbtreekey16, internal)
 RETURNS internal
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
+
+
 
 -- Create the operator class
 CREATE OPERATOR CLASS gist_int8_ops

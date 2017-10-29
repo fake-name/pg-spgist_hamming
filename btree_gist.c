@@ -12,6 +12,22 @@ PG_FUNCTION_INFO_V1(gbt_decompress);
 PG_FUNCTION_INFO_V1(gbtreekey_in);
 PG_FUNCTION_INFO_V1(gbtreekey_out);
 
+
+/*
+** int64 ops
+*/
+PG_FUNCTION_INFO_V1(gbt_int8_compress);
+PG_FUNCTION_INFO_V1(gbt_int8_fetch);
+PG_FUNCTION_INFO_V1(gbt_int8_union);
+PG_FUNCTION_INFO_V1(gbt_int8_picksplit);
+PG_FUNCTION_INFO_V1(gbt_int8_consistent);
+PG_FUNCTION_INFO_V1(gbt_int8_distance);
+PG_FUNCTION_INFO_V1(gbt_int8_penalty);
+PG_FUNCTION_INFO_V1(gbt_int8_same);
+
+PG_FUNCTION_INFO_V1(gbt_int8_hamming_distance);
+
+
 /**************************************************
  * In/Out for keys
  **************************************************/
@@ -58,17 +74,6 @@ typedef struct int64key
 	int64		upper;
 } int64KEY;
 
-/*
-** int64 ops
-*/
-PG_FUNCTION_INFO_V1(gbt_int8_compress);
-PG_FUNCTION_INFO_V1(gbt_int8_fetch);
-PG_FUNCTION_INFO_V1(gbt_int8_union);
-PG_FUNCTION_INFO_V1(gbt_int8_picksplit);
-PG_FUNCTION_INFO_V1(gbt_int8_consistent);
-PG_FUNCTION_INFO_V1(gbt_int8_distance);
-PG_FUNCTION_INFO_V1(gbt_int8_penalty);
-PG_FUNCTION_INFO_V1(gbt_int8_same);
 
 
 static bool
@@ -149,6 +154,7 @@ gbt_int8_dist(const void *a, const void *b, FmgrInfo *flinfo)
 	// return f_hamming( (*((const int64 *) (a))), (*((const int64 *) (b))) );
 
 }
+
 
 
 static const gbtree_ninfo tinfo =
@@ -253,6 +259,28 @@ gbt_int8_distance(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8(
 					 gbt_num_distance(&key, (void *) &query, GIST_LEAF(entry), &tinfo, fcinfo->flinfo)
 		);
+}
+
+
+Datum
+gbt_int8_hamming_distance(PG_FUNCTION_ARGS)
+{
+	GISTENTRY  *entry = (GISTENTRY *) PG_GETARG_POINTER(0);
+	int64		query = PG_GETARG_INT64(1);
+
+	/* Oid		subtype = PG_GETARG_OID(3); */
+	int64KEY   *kkk = (int64KEY *) DatumGetPointer(entry->key);
+	GBT_NUMKEY_R key;
+
+	key.lower = (GBT_NUMKEY *) &kkk->lower;
+	key.upper = (GBT_NUMKEY *) &kkk->upper;
+
+	PG_RETURN_FLOAT8(
+					 gbt_num_distance(&key, (void *) &query, GIST_LEAF(entry), &tinfo, fcinfo->flinfo)
+		);
+
+	// return f_hamming( (*((const int64 *) (a))), (*((const int64 *) (b))) );
+
 }
 
 
