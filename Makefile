@@ -3,7 +3,6 @@
 MODULE_big = pg_gist_hamming
 
 OBJS =  btree_gist.o      \
-		btree_utils_num.o \
 		$(WIN32RES)
 
 # 		btree_utils_var.o \
