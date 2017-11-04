@@ -1,6 +1,6 @@
 -- int8 check
 
-CREATE TABLE int8tmp_2 (a int4);
+CREATE TABLE int8tmp_2 (a int8);
 
 \copy int8tmp_2 from 'data/int8.data'
 

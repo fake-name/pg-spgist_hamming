@@ -6,7 +6,8 @@ OBJS = vptree.o
 EXTENSION = vptree
 DATA = vptree--1.0.sql
 
-REGRESS = init int8 int8_2 # not_equal
+REGRESS = init test_1
+# REGRESS = init int8 int8_2 # not_equal
 
 
 PGFILEDESC = "vptree - Viewpoint Tree GiST Index operator"
