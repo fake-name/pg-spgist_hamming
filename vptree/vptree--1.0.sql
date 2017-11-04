@@ -3,18 +3,29 @@
 
 CREATE TYPE vptree_area AS
 (
-    center	 _int4,
+    center	 int8,
     distance float8
 );
 
-CREATE OR REPLACE FUNCTION vptree_area_match(_int4, vptree_area) RETURNS boolean AS
+CREATE OR REPLACE FUNCTION vptree_area_match(int8, vptree_area) RETURNS boolean AS
 'MODULE_PATHNAME','vptree_area_match'
 LANGUAGE C IMMUTABLE STRICT;
 
+CREATE OR REPLACE FUNCTION vptree_eq_match(int8, int8) RETURNS boolean AS
+'MODULE_PATHNAME','vptree_eq_match'
+LANGUAGE C IMMUTABLE STRICT;
+
 CREATE OPERATOR <@ (
-	LEFTARG = _int4,
-	RIGHTARG = vptree_area, 
-	PROCEDURE = vptree_area_match,
+  LEFTARG = int8,
+  RIGHTARG = vptree_area,
+  PROCEDURE = vptree_area_match,
+  RESTRICT = contsel,
+  JOIN = contjoinsel);
+
+CREATE OPERATOR = (
+	LEFTARG = int8,
+	RIGHTARG = int8,
+	PROCEDURE = vptree_eq_match,
 	RESTRICT = contsel,
 	JOIN = contjoinsel);
 
@@ -26,11 +37,11 @@ CREATE OR REPLACE FUNCTION vptree_choose(internal, internal) RETURNS void AS
 'MODULE_PATHNAME','vptree_choose'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION vptree_inner_consistent(internal, internal) RETURNS boolean AS
+CREATE OR REPLACE FUNCTION vptree_inner_consistent(internal, internal) RETURNS void AS
 'MODULE_PATHNAME','vptree_inner_consistent'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION vptree_leaf_consistent(internal, internal) RETURNS void AS
+CREATE OR REPLACE FUNCTION vptree_leaf_consistent(internal, internal) RETURNS boolean AS
 'MODULE_PATHNAME','vptree_leaf_consistent'
 LANGUAGE C IMMUTABLE STRICT;
 
@@ -39,8 +50,9 @@ CREATE OR REPLACE FUNCTION vptree_picksplit(internal, internal) RETURNS void AS
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE OPERATOR CLASS vptree_ops
-   FOR TYPE _int4 USING spgist AS
-   OPERATOR 1  <@ (_int4, vptree_area),
+   FOR TYPE int8 USING spgist AS
+   OPERATOR 1  <@ (int8, vptree_area),
+   OPERATOR 2  = (int8, int8),
    FUNCTION 1  vptree_config(internal, internal),
    FUNCTION 2  vptree_choose(internal, internal),
    FUNCTION 3  vptree_picksplit(internal, internal),

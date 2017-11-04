@@ -7,6 +7,7 @@
 #include "utils/builtins.h"
 #include "utils/geo_decls.h"
 #include "utils/array.h"
+#include "utils/rel.h"
 
 typedef struct
 {
@@ -14,12 +15,10 @@ typedef struct
 	double distance;
 } PicksplitDistanceItem;
 
-#define ARRPTR(x)  ( (int4 *) ARR_DATA_PTR(x) )
-#define ARRNELEMS(x)  ArrayGetNItems(ARR_NDIM(x), ARR_DIMS(x))
-
 PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(vptree_config);
+PG_FUNCTION_INFO_V1(vptree_eq_match);
 PG_FUNCTION_INFO_V1(vptree_choose);
 PG_FUNCTION_INFO_V1(vptree_picksplit);
 PG_FUNCTION_INFO_V1(vptree_inner_consistent);
@@ -37,38 +36,14 @@ static double getDistance(Datum d1, Datum d2);
 static int picksplitDistanceItemCmp(const void *v1, const void *v2);
 PicksplitDistanceItem *getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2);
 
+
 static double
 getDistance(Datum v1, Datum v2)
 {
-	ArrayType *a1 = DatumGetArrayTypeP(v1);
-	ArrayType *a2 = DatumGetArrayTypeP(v2);
-	int n1, n2, i1 = 0, i2 = 0, matches = 0;
-	int4 *d1, *d2;
-	
-	n1 = ARRNELEMS(a1);
-	n2 = ARRNELEMS(a2);
-	d1 = ARRPTR(a1);
-	d2 = ARRPTR(a2);
-	
-	while (i1 < n1 && i2 < n2)
-	{
-		if (d1[i1] < d2[i2])
-		{
-			i1++;
-		}
-		else if (d1[i1] == d2[i2])
-		{
-			matches++;
-			i1++;
-			i2++;
-		}
-		else
-		{
-			i2++;
-		}
-	}
-	
-	return 1.0 - ((double)matches) / ((double)(n1 + n2 - matches));
+	int64_t a1 = DatumGetInt64(v1);
+	int64_t a2 = DatumGetInt64(v2);
+
+	return abs(a1 - a2);
 }
 
 static int
@@ -76,7 +51,7 @@ picksplitDistanceItemCmp(const void *v1, const void *v2)
 {
 	const PicksplitDistanceItem *i1 = (const PicksplitDistanceItem *)v1;
 	const PicksplitDistanceItem *i2 = (const PicksplitDistanceItem *)v2;
-	
+
 	if (i1->distance < i2->distance)
 		return -1;
 	else if (i1->distance == i2->distance)
@@ -109,7 +84,7 @@ vptree_choose(PG_FUNCTION_ARGS)
 	out->resultType = spgMatchNode;
 	out->result.matchNode.levelAdd = 0;
 	out->result.matchNode.restDatum = in->datum;
-	
+
 	if (in->allTheSame)
 	{
 		/* nodeN will be set by core */
@@ -117,7 +92,7 @@ vptree_choose(PG_FUNCTION_ARGS)
 	}
 
 	Assert(in->hasPrefix);
-	
+
 	distance = getDistance(in->prefixDatum, in->datum);
 	out->result.matchNode.nodeN = in->nNodes - 1;
 	for (i = 1; i < in->nNodes; i++)
@@ -140,7 +115,7 @@ getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2)
 												sizeof(PicksplitDistanceItem));
 	int i, sameCount;
 	double prevDistance, distance, delta, avg, stdDev;
-	
+
 	for (i = 0; i < in->nTuples; i++)
 	{
 		items[i].index = i;
@@ -149,10 +124,10 @@ getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2)
 		else
 			items[i].distance = getDistance(splitDatum, in->datums[i]);
 	}
-	
-	qsort(items, in->nTuples, sizeof(PicksplitDistanceItem), 
+
+	qsort(items, in->nTuples, sizeof(PicksplitDistanceItem),
 													picksplitDistanceItemCmp);
-	
+
 	*val1 = 0.0;
 	sameCount = 1;
 	prevDistance = items[0].distance;
@@ -169,22 +144,22 @@ getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2)
 		{
 			sameCount++;
 		}
-		
+
 		delta = distance - prevDistance;
 		avg += delta;
-		
+
 		prevDistance = distance;
 	}
 	*val1 += sameCount * sameCount;
 	avg = avg / (in->nTuples - 1);
-	
+
 	stdDev = 0.0;
 	prevDistance = items[0].distance;
 	for (i = 1; i < in->nTuples; i++)
 	{
-		distance = items[i].distance;		
-		delta = distance - prevDistance;		
-		stdDev += (delta - avg) * (delta - avg);		
+		distance = items[i].distance;
+		delta = distance - prevDistance;
+		stdDev += (delta - avg) * (delta - avg);
 		prevDistance = distance;
 	}
 	stdDev = sqrt(stdDev / (in->nTuples - 2));
@@ -203,14 +178,14 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 	int nodeStartIndex, nodeEndIndex;
 	PicksplitDistanceItem *bestItems = NULL;
 	int i, j, optimalNodeSize, bestIndex = 0, k;
-	
+
 	optimalNodeSize = (in->nTuples + 7) / 8;
-	
+
 	for (i = 0; (i < 10) && (i < in->nTuples); i++)
 	{
 		PicksplitDistanceItem *items;
 		double val1, val2;
-		
+
 		items = getSplitParams(in, i, &val1, &val2);
 		if (first || val1 < bestVal1 || (val1 == bestVal1 && val2 < bestVal2))
 		{
@@ -226,12 +201,12 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 
 	out->hasPrefix = true;
 	out->prefixDatum = in->datums[bestIndex];
-	
+
 	out->mapTuplesToNodes = palloc(sizeof(int) * in->nTuples);
 	out->leafTupleDatums = palloc(sizeof(Datum) * in->nTuples);
 	out->nodeLabels = palloc(sizeof(Datum) * in->nTuples);
 	out->nNodes = 0;
-	
+
 	nodeStartIndex = 0;
 	nodeStartDistance = 0.0;
 	nodeEndIndex = 0;
@@ -239,9 +214,9 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 
 	out->nodeLabels[out->nNodes] = Float8GetDatum(nodeStartDistance);
 	out->nNodes++;
-	
+
 	prevDistance = 0.0;
-	
+
 	for (i = 0; i < in->nTuples; i++)
 	{
 		double distance;
@@ -272,14 +247,14 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 				out->nodeLabels[out->nNodes] = Float8GetDatum(nodeStartDistance);
 				out->nNodes++;
 			}
-		}	
+		}
 	}
 	for (j = nodeStartIndex; j < in->nTuples; j++)
 	{
 		k = bestItems[j].index;
 		out->mapTuplesToNodes[k] = out->nNodes - 1;
 		out->leafTupleDatums[k] = in->datums[k];
-	}	
+	}
 	PG_RETURN_VOID();
 }
 
@@ -288,53 +263,60 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 {
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
-	HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
+	// HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
 	Datum queryDatum;
 	double queryDistance;
 	double distance;
 	bool isNull;
 	int		i;
-	
-	queryDatum = GetAttributeByNum(query, 1, &isNull);
-	queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
-
-	Assert(in->hasPrefix);
-	
-	distance = getDistance(in->prefixDatum, queryDatum);
 
 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
-	
-	if (in->allTheSame)
-	{
-		/* Report that all nodes should be visited */
-		out->nNodes = in->nNodes;
-		for (i = 0; i < in->nNodes; i++)
-			out->nodeNumbers[i] = i;
-		PG_RETURN_VOID();
-	}
 
-	out->nNodes = 0;
-	for (i = 0; i < in->nNodes; i++)
+
+	for (i = 0; i < in->nkeys; i++)
 	{
-		double minDistance, maxDistance;
-		bool consistent = true;
-		
-		minDistance = DatumGetFloat8(in->nodeLabels[i]);
-		if (distance + queryDistance < minDistance)
+		// The argument is a instance of vptree_area
+		HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+		queryDatum = GetAttributeByNum(query, 1, &isNull);
+		queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+
+		Assert(in->hasPrefix);
+
+		distance = getDistance(in->prefixDatum, queryDatum);
+
+
+		if (in->allTheSame)
 		{
-			consistent = false;
+			/* Report that all nodes should be visited */
+			out->nNodes = in->nNodes;
+			for (i = 0; i < in->nNodes; i++)
+				out->nodeNumbers[i] = i;
+			PG_RETURN_VOID();
 		}
-		else if (i < in->nNodes - 1)
+
+		out->nNodes = 0;
+		for (i = 0; i < in->nNodes; i++)
 		{
-			maxDistance = DatumGetFloat8(in->nodeLabels[i + 1]);
-			if (maxDistance + queryDistance <= distance)
+			double minDistance, maxDistance;
+			bool consistent = true;
+
+			minDistance = DatumGetFloat8(in->nodeLabels[i]);
+			if (distance + queryDistance < minDistance)
+			{
 				consistent = false;
-		}
-		
-		if (consistent)
-		{
-			out->nodeNumbers[out->nNodes] = i;
-			out->nNodes++;
+			}
+			else if (i < in->nNodes - 1)
+			{
+				maxDistance = DatumGetFloat8(in->nodeLabels[i + 1]);
+				if (maxDistance + queryDistance <= distance)
+					consistent = false;
+			}
+
+			if (consistent)
+			{
+				out->nodeNumbers[out->nNodes] = i;
+				out->nNodes++;
+			}
 		}
 	}
 	PG_RETURN_VOID();
@@ -346,24 +328,41 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 {
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
-	HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
+	// HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
 	Datum queryDatum;
 	double queryDistance;
 	double distance;
 	bool isNull;
-	
+	bool		res;
+	int			i;
+
+	res = false;
 	out->recheck = false;
 	out->leafValue = in->leafDatum;
-	
-	queryDatum = GetAttributeByNum(query, 1, &isNull);
-	queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
-	
-	distance = getDistance(in->leafDatum, queryDatum);
-	
-	if (distance <= queryDistance)
-		PG_RETURN_BOOL(true);
-	else
-		PG_RETURN_BOOL(false);
+
+	for (i = 0; i < in->nkeys; i++)
+	{
+		// The argument is a instance of vptree_area
+		HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+
+		switch (in->scankeys[i].sk_strategy)
+		{
+			case RTLeftStrategyNumber:
+				queryDatum = GetAttributeByNum(query, 1, &isNull);
+				queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+
+				distance = getDistance(in->leafDatum, queryDatum);
+				res = (distance <= queryDistance);
+			default:
+				elog(ERROR, "unrecognized strategy number: %d",
+					 in->scankeys[i].sk_strategy);
+				break;
+		}
+
+		if (!res)
+			break;
+	}
+	PG_RETURN_BOOL(res);
 }
 
 Datum
@@ -375,13 +374,24 @@ vptree_area_match(PG_FUNCTION_ARGS)
 	double queryDistance;
 	double distance;
 	bool isNull;
-	
+
 	queryDatum = GetAttributeByNum(query, 1, &isNull);
 	queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
-	
+
 	distance = getDistance(value, queryDatum);
-	
+
 	if (distance <= queryDistance)
+		PG_RETURN_BOOL(true);
+	else
+		PG_RETURN_BOOL(false);
+}
+
+Datum
+vptree_eq_match(PG_FUNCTION_ARGS)
+{
+	int64_t value_1 = DatumGetInt64(0);
+	int64_t value_2 = DatumGetInt64(1);
+	if (value_1 == value_2)
 		PG_RETURN_BOOL(true);
 	else
 		PG_RETURN_BOOL(false);
