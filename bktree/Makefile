@@ -1,16 +1,16 @@
 
 
-MODULE_big = vptree
-OBJS = vptree.o
+MODULE_big = bktree
+OBJS = bktree.o
 
-EXTENSION = vptree
-DATA = vptree--1.0.sql
+EXTENSION = bktree
+DATA = bktree--1.0.sql
 
 REGRESS = init test_1 int8
 # REGRESS = init int8 int8_2 # not_equal
 
 
-PGFILEDESC = "vptree - Viewpoint Tree GiST Index operator"
+PGFILEDESC = "bktree - Viewpoint Tree GiST Index operator"
 
 
 ifdef USE_PGXS
@@ -18,7 +18,7 @@ ifdef USE_PGXS
 	PGXS := $(shell $(PG_CONFIG) --pgxs)
 	include $(PGXS)
 else
-	subdir = contrib/pg_gist_hamming/vptree
+	subdir = contrib/pg_gist_hamming/bktree
 	top_builddir = ../../..
 	include $(top_builddir)/src/Makefile.global
 	include $(top_srcdir)/contrib/contrib-global.mk

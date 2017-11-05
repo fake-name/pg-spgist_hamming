@@ -1,0 +1,5 @@
+# vptree extension
+comment = 'BK-tree implementation'
+default_version = '1.0'
+module_pathname = '$libdir/bktree'
+relocatable = true

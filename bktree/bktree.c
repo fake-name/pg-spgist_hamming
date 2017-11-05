@@ -17,23 +17,23 @@ typedef struct
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(vptree_config);
-PG_FUNCTION_INFO_V1(vptree_eq_match);
-PG_FUNCTION_INFO_V1(vptree_choose);
-PG_FUNCTION_INFO_V1(vptree_picksplit);
-PG_FUNCTION_INFO_V1(vptree_inner_consistent);
-PG_FUNCTION_INFO_V1(vptree_leaf_consistent);
-PG_FUNCTION_INFO_V1(vptree_area_match);
-PG_FUNCTION_INFO_V1(vptree_get_distance);
+PG_FUNCTION_INFO_V1(bktree_config);
+PG_FUNCTION_INFO_V1(bktree_eq_match);
+PG_FUNCTION_INFO_V1(bktree_choose);
+PG_FUNCTION_INFO_V1(bktree_picksplit);
+PG_FUNCTION_INFO_V1(bktree_inner_consistent);
+PG_FUNCTION_INFO_V1(bktree_leaf_consistent);
+PG_FUNCTION_INFO_V1(bktree_area_match);
+PG_FUNCTION_INFO_V1(bktree_get_distance);
 
-Datum vptree_config(PG_FUNCTION_ARGS);
-Datum vptree_choose(PG_FUNCTION_ARGS);
-Datum vptree_picksplit(PG_FUNCTION_ARGS);
-Datum vptree_inner_consistent(PG_FUNCTION_ARGS);
-Datum vptree_leaf_consistent(PG_FUNCTION_ARGS);
-Datum vptree_area_match(PG_FUNCTION_ARGS);
+Datum bktree_config(PG_FUNCTION_ARGS);
+Datum bktree_choose(PG_FUNCTION_ARGS);
+Datum bktree_picksplit(PG_FUNCTION_ARGS);
+Datum bktree_inner_consistent(PG_FUNCTION_ARGS);
+Datum bktree_leaf_consistent(PG_FUNCTION_ARGS);
+Datum bktree_area_match(PG_FUNCTION_ARGS);
 
-Datum vptree_get_distance(PG_FUNCTION_ARGS);
+Datum bktree_get_distance(PG_FUNCTION_ARGS);
 
 #define fprintf_to_ereport(msg, ...)  ereport(NOTICE, (errmsg_internal(msg, ##__VA_ARGS__)))
 // #define fprintf_to_ereport(msg, ...)
@@ -70,7 +70,7 @@ picksplitDistanceItemCmp(const void *v1, const void *v2)
 }
 
 Datum
-vptree_config(PG_FUNCTION_ARGS)
+bktree_config(PG_FUNCTION_ARGS)
 {
 	/* spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0); */
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
@@ -83,7 +83,7 @@ vptree_config(PG_FUNCTION_ARGS)
 }
 
 Datum
-vptree_choose(PG_FUNCTION_ARGS)
+bktree_choose(PG_FUNCTION_ARGS)
 {
 	spgChooseIn   *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
@@ -184,7 +184,7 @@ getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2)
 }
 
 Datum
-vptree_picksplit(PG_FUNCTION_ARGS)
+bktree_picksplit(PG_FUNCTION_ARGS)
 {
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
@@ -205,7 +205,7 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 
 	optimalNodeSize = (in->nTuples + 7) / 8;
 
-	fprintf_to_ereport("vptree_picksplit across %d tuples, with an optimal node size of %d", in->nTuples, optimalNodeSize);
+	fprintf_to_ereport("bktree_picksplit across %d tuples, with an optimal node size of %d", in->nTuples, optimalNodeSize);
 
 	for (i = 0; (i < 10) && (i < in->nTuples); i++)
 	{
@@ -229,7 +229,7 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 		}
 	}
 
-	fprintf_to_ereport("vptree_picksplit extracted split params: (%f, %f), index: %i", bestVal1, bestVal2, bestIndex);
+	fprintf_to_ereport("bktree_picksplit extracted split params: (%f, %f), index: %i", bestVal1, bestVal2, bestIndex);
 	fprintf_to_ereport("Picksplit best datum value: %ld", DatumGetInt64(in->datums[bestIndex]));
 
 	out->hasPrefix = true;
@@ -302,7 +302,7 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 }
 
 Datum
-vptree_inner_consistent(PG_FUNCTION_ARGS)
+bktree_inner_consistent(PG_FUNCTION_ARGS)
 {
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
@@ -312,14 +312,14 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 	bool isNull;
 	int		i;
 
-	fprintf_to_ereport("vptree_inner_consistent");
+	fprintf_to_ereport("bktree_inner_consistent");
 
 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
 
 
 	for (i = 0; i < in->nkeys; i++)
 	{
-		// The argument is a instance of vptree_area
+		// The argument is a instance of bktree_area
 		HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
 		queryDatum = GetAttributeByNum(query, 1, &isNull);
 		queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
@@ -368,7 +368,7 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 
 
 Datum
-vptree_leaf_consistent(PG_FUNCTION_ARGS)
+bktree_leaf_consistent(PG_FUNCTION_ARGS)
 {
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
@@ -383,11 +383,11 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 	out->recheck = false;
 	out->leafValue = in->leafDatum;
 
-	fprintf_to_ereport("vptree_leaf_consistent with %d keys", in->nkeys);
+	fprintf_to_ereport("bktree_leaf_consistent with %d keys", in->nkeys);
 
 	for (i = 0; i < in->nkeys; i++)
 	{
-		// The argument is a instance of vptree_area
+		// The argument is a instance of bktree_area
 		HeapTupleHeader query;
 
 		switch (in->scankeys[i].sk_strategy)
@@ -401,7 +401,7 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 					double queryDistance;
 					bool isNull;
 
-					fprintf_to_ereport("vptree_inner_consistent RTContainedByStrategyNumber");
+					fprintf_to_ereport("bktree_inner_consistent RTContainedByStrategyNumber");
 
 					query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
 					queryDatum = GetAttributeByNum(query, 1, &isNull);
@@ -417,7 +417,7 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 				// For the equal operator, the two parameters are both int8,
 				// so we just get the distance, and check if it's zero
 
-					fprintf_to_ereport("vptree_inner_consistent RTEqualStrategyNumber");
+					fprintf_to_ereport("bktree_inner_consistent RTEqualStrategyNumber");
 				distance = getDistance(in->leafDatum, in->scankeys[i].sk_argument);
 				res = (distance == 0);
 				break;
@@ -436,7 +436,7 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 }
 
 Datum
-vptree_area_match(PG_FUNCTION_ARGS)
+bktree_area_match(PG_FUNCTION_ARGS)
 {
 	Datum value = PG_GETARG_DATUM(0);
 	HeapTupleHeader query = PG_GETARG_HEAPTUPLEHEADER(1);
@@ -457,7 +457,7 @@ vptree_area_match(PG_FUNCTION_ARGS)
 }
 
 Datum
-vptree_eq_match(PG_FUNCTION_ARGS)
+bktree_eq_match(PG_FUNCTION_ARGS)
 {
 	int64_t value_1 = DatumGetInt64(0);
 	int64_t value_2 = DatumGetInt64(1);
@@ -468,7 +468,7 @@ vptree_eq_match(PG_FUNCTION_ARGS)
 }
 
 Datum
-vptree_get_distance(PG_FUNCTION_ARGS)
+bktree_get_distance(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_FLOAT8(getDistance(PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 }

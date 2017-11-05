@@ -1,0 +1,145 @@
+-- int8 check
+-- SELECT pg_sleep(20);
+CREATE TABLE int8tmp (a int8);
+\copy int8tmp from 'data/test_data_1.data'
+CREATE INDEX int8idx ON int8tmp USING spgist ( a vptree_ops );
+SET enable_seqscan=off;
+-- These should work (I'm not sure how)
+SELECT count(*) FROM int8tmp WHERE a  = 464571291354841::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM int8tmp WHERE a  = 7::int8;
+ count 
+-------
+     1
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM int8tmp WHERE a  = 7::int8;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Index Only Scan using int8idx on int8tmp
+         Index Cond: (a = '7'::bigint)
+(3 rows)
+
+-- These should fail, since we don't provide operators
+-- for the relevant conditionals (<, >, <=, >=)
+-- Apparently the SP-GiST system just coerces the
+-- result to an empty set if it doesn't know how
+-- to apply the operator
+SELECT count(*) FROM int8tmp WHERE a  < 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM int8tmp WHERE a  > 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM int8tmp WHERE a  <= 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM int8tmp WHERE a  >= 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT a, a <@ ('5', 1), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 1);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 4 | t        |        1
+(3 rows)
+
+SELECT a, a <@ ('5', 2), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 2);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 7 | t        |        2
+ 3 | t        |        2
+ 4 | t        |        1
+(5 rows)
+
+SELECT a, a <@ ('5', 2), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 3);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 2 | f        |        3
+ 7 | t        |        2
+ 8 | f        |        3
+ 3 | t        |        2
+ 4 | t        |        1
+(7 rows)
+
+SELECT a, a <@ ('5', 4), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 4);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 1 | t        |        4
+ 2 | t        |        3
+ 7 | t        |        2
+ 8 | t        |        3
+ 3 | t        |        2
+ 4 | t        |        1
+ 9 | t        |        4
+(9 rows)
+
+SELECT a, a <@ (5, 1), a <-> 5 FROM int8tmp WHERE  a <@ (5, 1);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 4 | t        |        1
+(3 rows)
+
+SELECT a, a <@ (5, 2), a <-> 5 FROM int8tmp WHERE  a <@ (5, 2);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 7 | t        |        2
+ 3 | t        |        2
+ 4 | t        |        1
+(5 rows)
+
+SELECT a, a <@ (5, 2), a <-> 5 FROM int8tmp WHERE  a <@ (5, 3);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 2 | f        |        3
+ 7 | t        |        2
+ 8 | f        |        3
+ 3 | t        |        2
+ 4 | t        |        1
+(7 rows)
+
+SELECT a, a <@ (5, 4), a <-> 5 FROM int8tmp WHERE  a <@ (5, 4);
+ a | ?column? | ?column? 
+---+----------+----------
+ 5 | t        |        0
+ 6 | t        |        1
+ 1 | t        |        4
+ 2 | t        |        3
+ 7 | t        |        2
+ 8 | t        |        3
+ 3 | t        |        2
+ 4 | t        |        1
+ 9 | t        |        4
+(9 rows)
+
+-- EXPLAIN (COSTS OFF)
