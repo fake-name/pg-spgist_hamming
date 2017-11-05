@@ -1,37 +1,39 @@
 -- int8 check
 
+-- SELECT pg_sleep(20);
+
 CREATE TABLE int8tmp (a int8);
 
 \copy int8tmp from 'data/test_data_1.data'
-
-SET enable_seqscan=on;
-
-SELECT count(*) FROM int8tmp WHERE a <  464571291354841;
-
-SELECT count(*) FROM int8tmp WHERE a <= 464571291354841;
-
-SELECT count(*) FROM int8tmp WHERE a  = 464571291354841;
-
-SELECT count(*) FROM int8tmp WHERE a >= 464571291354841;
-
-SELECT count(*) FROM int8tmp WHERE a >  464571291354841;
-
--- SELECT a, a <@ '464571291354841' FROM int8tmp ORDER BY a <@ '464571291354841' LIMIT 3;
 
 CREATE INDEX int8idx ON int8tmp USING spgist ( a vptree_ops );
 
 SET enable_seqscan=off;
 
-SELECT count(*) FROM int8tmp WHERE a <  464571291354841::int8;
-
-SELECT count(*) FROM int8tmp WHERE a <= 464571291354841::int8;
-
+-- These should work (I'm not sure how)
 SELECT count(*) FROM int8tmp WHERE a  = 464571291354841::int8;
+SELECT count(*) FROM int8tmp WHERE a  = 7::int8;
 
-SELECT count(*) FROM int8tmp WHERE a >= 464571291354841::int8;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM int8tmp WHERE a  = 7::int8;
 
-SELECT count(*) FROM int8tmp WHERE a >  464571291354841::int8;
+-- These should fail, since we don't provide operators
+-- for the relevant conditionals (<, >, <=, >=)
+-- Apparently the SP-GiST system just coerces the
+-- result to an empty set if it doesn't know how
+-- to apply the operator
+SELECT count(*) FROM int8tmp WHERE a  < 7::int8;
+SELECT count(*) FROM int8tmp WHERE a  > 7::int8;
+SELECT count(*) FROM int8tmp WHERE a  <= 7::int8;
+SELECT count(*) FROM int8tmp WHERE a  >= 7::int8;
 
-EXPLAIN (COSTS OFF)
-SELECT a, a <@ '464571291354841' FROM int8tmp ORDER BY a <@ '464571291354841' LIMIT 3;
-SELECT a, a <@ '464571291354841' FROM int8tmp ORDER BY a <@ '464571291354841' LIMIT 3;
+SELECT a, a <@ ('5', 1), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 1);
+SELECT a, a <@ ('5', 2), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 2);
+SELECT a, a <@ ('5', 2), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 3);
+SELECT a, a <@ ('5', 4), a <-> 5 FROM int8tmp WHERE  a <@ ('5', 4);
+
+SELECT a, a <@ (5, 1), a <-> 5 FROM int8tmp WHERE  a <@ (5, 1);
+SELECT a, a <@ (5, 2), a <-> 5 FROM int8tmp WHERE  a <@ (5, 2);
+SELECT a, a <@ (5, 2), a <-> 5 FROM int8tmp WHERE  a <@ (5, 3);
+SELECT a, a <@ (5, 4), a <-> 5 FROM int8tmp WHERE  a <@ (5, 4);
+
+-- EXPLAIN (COSTS OFF)

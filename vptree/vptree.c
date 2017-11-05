@@ -24,6 +24,7 @@ PG_FUNCTION_INFO_V1(vptree_picksplit);
 PG_FUNCTION_INFO_V1(vptree_inner_consistent);
 PG_FUNCTION_INFO_V1(vptree_leaf_consistent);
 PG_FUNCTION_INFO_V1(vptree_area_match);
+PG_FUNCTION_INFO_V1(vptree_get_distance);
 
 Datum vptree_config(PG_FUNCTION_ARGS);
 Datum vptree_choose(PG_FUNCTION_ARGS);
@@ -31,6 +32,12 @@ Datum vptree_picksplit(PG_FUNCTION_ARGS);
 Datum vptree_inner_consistent(PG_FUNCTION_ARGS);
 Datum vptree_leaf_consistent(PG_FUNCTION_ARGS);
 Datum vptree_area_match(PG_FUNCTION_ARGS);
+
+Datum vptree_get_distance(PG_FUNCTION_ARGS);
+
+// #define fprintf_to_ereport(msg, ...)  ereport(NOTICE, (errmsg_internal(msg, ##__VA_ARGS__)))
+#define fprintf_to_ereport(msg, ...)
+
 
 static double getDistance(Datum d1, Datum d2);
 static int picksplitDistanceItemCmp(const void *v1, const void *v2);
@@ -42,8 +49,10 @@ getDistance(Datum v1, Datum v2)
 {
 	int64_t a1 = DatumGetInt64(v1);
 	int64_t a2 = DatumGetInt64(v2);
+	int64_t diff = abs(a1 - a2);
 
-	return abs(a1 - a2);
+	fprintf_to_ereport("getDistance %ld <-> %ld : %ld", a1, a2, diff);
+	return diff;
 }
 
 static int
@@ -66,23 +75,23 @@ vptree_config(PG_FUNCTION_ARGS)
 	/* spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0); */
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	cfg->prefixType = POINTOID;
-	cfg->labelType = FLOAT8OID;	/* we don't need node labels */
+	cfg->prefixType    = POINTOID;
+	cfg->labelType     = FLOAT8OID;	/* we don't need node labels */
 	cfg->canReturnData = true;
-	cfg->longValuesOK = false;
+	cfg->longValuesOK  = false;
 	PG_RETURN_VOID();
 }
 
 Datum
 vptree_choose(PG_FUNCTION_ARGS)
 {
-	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
+	spgChooseIn   *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	double distance;
 	int i;
 
 	out->resultType = spgMatchNode;
-	out->result.matchNode.levelAdd = 0;
+	out->result.matchNode.levelAdd  = 0;
 	out->result.matchNode.restDatum = in->datum;
 
 	if (in->allTheSame)
@@ -125,8 +134,7 @@ getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2)
 			items[i].distance = getDistance(splitDatum, in->datums[i]);
 	}
 
-	qsort(items, in->nTuples, sizeof(PicksplitDistanceItem),
-													picksplitDistanceItemCmp);
+	qsort(items, in->nTuples, sizeof(PicksplitDistanceItem), picksplitDistanceItemCmp);
 
 	*val1 = 0.0;
 	sameCount = 1;
@@ -263,12 +271,13 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 {
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
-	// HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
 	Datum queryDatum;
 	double queryDistance;
 	double distance;
 	bool isNull;
 	int		i;
+
+	fprintf_to_ereport("vptree_inner_consistent");
 
 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
 
@@ -329,10 +338,9 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
 	// HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
-	Datum queryDatum;
-	double queryDistance;
+
+
 	double distance;
-	bool isNull;
 	bool		res;
 	int			i;
 
@@ -340,27 +348,54 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 	out->recheck = false;
 	out->leafValue = in->leafDatum;
 
+	fprintf_to_ereport("vptree_leaf_consistent with %d keys", in->nkeys);
+
 	for (i = 0; i < in->nkeys; i++)
 	{
 		// The argument is a instance of vptree_area
-		HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+		HeapTupleHeader query;
 
 		switch (in->scankeys[i].sk_strategy)
 		{
 			case RTLeftStrategyNumber:
-				queryDatum = GetAttributeByNum(query, 1, &isNull);
-				queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+				// For the contained parameter, we check if the distance between the target and the current
+				// value is within the scope dictated by the filtering parameter
+				{
 
-				distance = getDistance(in->leafDatum, queryDatum);
-				res = (distance <= queryDistance);
+					Datum queryDatum;
+					double queryDistance;
+					bool isNull;
+
+					fprintf_to_ereport("vptree_inner_consistent RTContainedByStrategyNumber");
+
+					query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+					queryDatum = GetAttributeByNum(query, 1, &isNull);
+					queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+
+					distance = getDistance(in->leafDatum, queryDatum);
+
+					res = (distance <= queryDistance);
+				}
+				break;
+
+			case RTOverLeftStrategyNumber:
+				// For the equal operator, the two parameters are both int8,
+				// so we just get the distance, and check if it's zero
+
+					fprintf_to_ereport("vptree_inner_consistent RTEqualStrategyNumber");
+				distance = getDistance(in->leafDatum, in->scankeys[i].sk_argument);
+				res = (distance == 0);
+				break;
+
 			default:
-				elog(ERROR, "unrecognized strategy number: %d",
-					 in->scankeys[i].sk_strategy);
+				elog(ERROR, "unrecognized strategy number: %d", in->scankeys[i].sk_strategy);
 				break;
 		}
 
 		if (!res)
+		{
 			break;
+		}
 	}
 	PG_RETURN_BOOL(res);
 }
@@ -395,4 +430,10 @@ vptree_eq_match(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(true);
 	else
 		PG_RETURN_BOOL(false);
+}
+
+Datum
+vptree_get_distance(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_FLOAT8(getDistance(PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 }
