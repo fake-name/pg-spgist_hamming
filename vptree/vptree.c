@@ -35,8 +35,8 @@ Datum vptree_area_match(PG_FUNCTION_ARGS);
 
 Datum vptree_get_distance(PG_FUNCTION_ARGS);
 
-#define fprintf_to_ereport(msg, ...)  ereport(NOTICE, (errmsg_internal(msg, ##__VA_ARGS__)))
-// #define fprintf_to_ereport(msg, ...)
+// #define fprintf_to_ereport(msg, ...)  ereport(NOTICE, (errmsg_internal(msg, ##__VA_ARGS__)))
+#define fprintf_to_ereport(msg, ...)
 
 
 static double getDistance(Datum d1, Datum d2);
@@ -75,7 +75,7 @@ vptree_config(PG_FUNCTION_ARGS)
 	/* spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0); */
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	cfg->prefixType    = POINTOID;
+	cfg->prefixType    = INT8OID;
 	cfg->labelType     = FLOAT8OID;	/* we don't need node labels */
 	cfg->canReturnData = true;
 	cfg->longValuesOK  = false;
@@ -85,10 +85,14 @@ vptree_config(PG_FUNCTION_ARGS)
 Datum
 vptree_choose(PG_FUNCTION_ARGS)
 {
+
 	spgChooseIn   *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	double distance;
 	int i;
+
+	fprintf_to_ereport("vptree_choose");
+
 
 	out->resultType = spgMatchNode;
 	out->result.matchNode.levelAdd  = 0;
@@ -233,10 +237,10 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 	fprintf_to_ereport("Picksplit best datum value: %ld", DatumGetInt64(in->datums[bestIndex]));
 
 	out->hasPrefix = true;
-	Datum tmp = Int64GetDatum(DatumGetInt64(in->datums[bestIndex]));
-	out->prefixDatum = tmp;
+
+	out->prefixDatum = in->datums[bestIndex];
 	fprintf_to_ereport("Get data value: %ld", DatumGetInt64(in->datums[bestIndex]));
-	fprintf_to_ereport("Reallocated datum (tmp): %ld", tmp);
+	// fprintf_to_ereport("Reallocated datum (tmp): %ld", tmp);
 	fprintf_to_ereport("Reallocated datum: %ld", out->prefixDatum);
 
 	out->mapTuplesToNodes = palloc(sizeof(int)   * in->nTuples);
@@ -312,56 +316,89 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 	bool isNull;
 	int		i;
 
-	fprintf_to_ereport("vptree_inner_consistent");
+	fprintf_to_ereport("vptree_inner_consistent with %d keys", in->nkeys);
 
 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
 
 
 	for (i = 0; i < in->nkeys; i++)
 	{
+
 		// The argument is a instance of vptree_area
-		HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
-		queryDatum = GetAttributeByNum(query, 1, &isNull);
-		queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+		HeapTupleHeader query;
 
-		Assert(in->hasPrefix);
-
-		distance = getDistance(in->prefixDatum, queryDatum);
-
-
-		if (in->allTheSame)
+		switch (in->scankeys[i].sk_strategy)
 		{
-			/* Report that all nodes should be visited */
-			out->nNodes = in->nNodes;
-			for (i = 0; i < in->nNodes; i++)
-				out->nodeNumbers[i] = i;
-			PG_RETURN_VOID();
+			case RTLeftStrategyNumber:
+				// For the contained parameter, we check if the distance between the target and the current
+				// value is within the scope dictated by the filtering parameter
+				{
+					fprintf_to_ereport("Extracting arguments");
+						// The argument is a instance of vptree_area
+						HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+						queryDatum = GetAttributeByNum(query, 1, &isNull);
+						queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+
+						fprintf_to_ereport("Assert(in->hasPrefix);");
+						Assert(in->hasPrefix);
+
+						fprintf_to_ereport("calling get_distance");
+
+						distance = getDistance(in->prefixDatum, queryDatum);
+						fprintf_to_ereport("get_distance OK");
+
+
+						if (in->allTheSame)
+						{
+							/* Report that all nodes should be visited */
+							out->nNodes = in->nNodes;
+							for (i = 0; i < in->nNodes; i++)
+								out->nodeNumbers[i] = i;
+							PG_RETURN_VOID();
+						}
+
+						out->nNodes = 0;
+						for (i = 0; i < in->nNodes; i++)
+						{
+							double minDistance, maxDistance;
+							bool consistent = true;
+
+							minDistance = DatumGetFloat8(in->nodeLabels[i]);
+							if (distance + queryDistance < minDistance)
+							{
+								consistent = false;
+							}
+							else if (i < in->nNodes - 1)
+							{
+								maxDistance = DatumGetFloat8(in->nodeLabels[i + 1]);
+								if (maxDistance + queryDistance <= distance)
+									consistent = false;
+							}
+
+							if (consistent)
+							{
+								out->nodeNumbers[out->nNodes] = i;
+								out->nNodes++;
+							}
+						}
+				}
+				break;
+
+			// case RTOverLeftStrategyNumber:
+			// 	// For the equal operator, the two parameters are both int8,
+			// 	// so we just get the distance, and check if it's zero
+
+			// 		fprintf_to_ereport("vptree_inner_consistent RTEqualStrategyNumber");
+			// 	distance = getDistance(in->leafDatum, in->scankeys[i].sk_argument);
+			// 	res = (distance == 0);
+			// 	break;
+
+			default:
+				elog(ERROR, "unrecognized strategy number: %d", in->scankeys[i].sk_strategy);
+				break;
 		}
 
-		out->nNodes = 0;
-		for (i = 0; i < in->nNodes; i++)
-		{
-			double minDistance, maxDistance;
-			bool consistent = true;
 
-			minDistance = DatumGetFloat8(in->nodeLabels[i]);
-			if (distance + queryDistance < minDistance)
-			{
-				consistent = false;
-			}
-			else if (i < in->nNodes - 1)
-			{
-				maxDistance = DatumGetFloat8(in->nodeLabels[i + 1]);
-				if (maxDistance + queryDistance <= distance)
-					consistent = false;
-			}
-
-			if (consistent)
-			{
-				out->nodeNumbers[out->nNodes] = i;
-				out->nNodes++;
-			}
-		}
 	}
 	PG_RETURN_VOID();
 }

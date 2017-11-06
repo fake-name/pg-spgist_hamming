@@ -44,12 +44,31 @@ static int picksplitDistanceItemCmp(const void *v1, const void *v2);
 PicksplitDistanceItem *getSplitParams(spgPickSplitIn *in, int splitIndex, double *val1, double *val2);
 
 
+int64_t f_hamming(int64_t a_int, int64_t b_int)
+{
+	/*
+	Compute number of bits that are not common between `a` and `b`.
+	return value is a plain integer
+	*/
+
+	// uint64_t x = (a_int ^ b_int);
+	// __asm__(
+	// 	"popcnt %0 %0  \n\t"// +r means input/output, r means intput
+	// 	: "+r" (x) );
+
+	// return x;
+	uint64_t x = (a_int ^ b_int);
+
+	return __builtin_popcountll (x);
+
+}
+
 static double
 getDistance(Datum v1, Datum v2)
 {
 	int64_t a1 = DatumGetInt64(v1);
 	int64_t a2 = DatumGetInt64(v2);
-	int64_t diff = Abs(a1 - a2);
+	int64_t diff = f_hamming(a1, a2);
 
 	// fprintf_to_ereport("getDistance %ld <-> %ld : %ld", a1, a2, diff);
 	return diff;
@@ -188,114 +207,44 @@ bktree_picksplit(PG_FUNCTION_ARGS)
 {
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
-	bool first = true;
-	double bestVal1 = 0.0;
-	double bestVal2 = 0.0;
-	double nodeStartDistance;
-	double nodeEndDistance;
-	double prevDistance;
-	int nodeStartIndex;
-	int nodeEndIndex;
-	PicksplitDistanceItem *bestItems = NULL;
+	Datum tmp;
 	int i;
-	int j;
-	int optimalNodeSize;
-	int bestIndex = 0;
-	int k;
 
-	optimalNodeSize = (in->nTuples + 7) / 8;
+	// Since the concept of "best" isn't really a thing with BK-trees,
+	// we just pick one of the input nodes at random.
+	int bestIndex = in->nTuples / 2;
+	int64_t this_node_hash = DatumGetInt64(in->datums[bestIndex]);
 
-	fprintf_to_ereport("bktree_picksplit across %d tuples, with an optimal node size of %d", in->nTuples, optimalNodeSize);
+	fprintf_to_ereport("bktree_picksplit across %d tuples, with child-node count of %d, on value %016x", in->nTuples, bestIndex, this_node_hash);
 
-	for (i = 0; (i < 10) && (i < in->nTuples); i++)
-	{
-		PicksplitDistanceItem *items;
-		double val1, val2;
-
-		items = getSplitParams(in, i, &val1, &val2);
-
-		fprintf_to_ereport("SplitParams: (%f, %f), index: %i", bestVal1, bestVal2, i);
-
-		if (first || val1 < bestVal1 || (val1 == bestVal1 && val2 < bestVal2))
-		{
-			fprintf_to_ereport("Selected item");
-			first = false;
-			if (bestItems)
-				pfree(bestItems);
-			bestItems = items;
-			bestIndex = i;
-			bestVal1 = val1;
-			bestVal2 = val2;
-		}
-	}
-
-	fprintf_to_ereport("bktree_picksplit extracted split params: (%f, %f), index: %i", bestVal1, bestVal2, bestIndex);
-	fprintf_to_ereport("Picksplit best datum value: %ld", DatumGetInt64(in->datums[bestIndex]));
-
-	out->hasPrefix = true;
-	Datum tmp = Int64GetDatum(DatumGetInt64(in->datums[bestIndex]));
+	out->hasPrefix = false;
+	tmp = Int64GetDatum(DatumGetInt64(in->datums[bestIndex]));
 	out->prefixDatum = tmp;
-	fprintf_to_ereport("Get data value: %ld", DatumGetInt64(in->datums[bestIndex]));
-	fprintf_to_ereport("Reallocated datum (tmp): %ld", tmp);
-	fprintf_to_ereport("Reallocated datum: %ld", out->prefixDatum);
+	fprintf_to_ereport("Get data value: %ld, %ld, %ld", DatumGetInt64(in->datums[bestIndex]), tmp, out->prefixDatum);
 
 	out->mapTuplesToNodes = palloc(sizeof(int)   * in->nTuples);
 	out->leafTupleDatums  = palloc(sizeof(Datum) * in->nTuples);
-	out->nodeLabels       = palloc(sizeof(Datum) * in->nTuples);
-	out->nNodes = 0;
+	// out->nodeLabels       = palloc(sizeof(Datum) * in->nTuples);
+	out->nodeLabels       = NULL;
 
-	nodeStartIndex = 0;
-	nodeStartDistance = 0.0;
-	nodeEndIndex = 0;
-	nodeEndDistance = 0.0;
+	// Allow edit distances of 0 - 64 inclusive
+	out->nNodes = 65;
 
-	out->nodeLabels[out->nNodes] = Float8GetDatum(nodeStartDistance);
+
 	out->nNodes++;
-
-	prevDistance = 0.0;
-
-	fprintf_to_ereport("Splitting into %d nodes", in->nTuples / optimalNodeSize);
 
 	for (i = 0; i < in->nTuples; i++)
 	{
-		double distance;
-		distance = bestItems[i].distance;
-		if (distance > prevDistance)
-		{
-			if (i - nodeStartIndex < optimalNodeSize)
-			{
-				nodeEndIndex = i;
-				nodeEndDistance = distance;
-			}
-			else
-			{
-				fprintf_to_ereport("Split at node index %d, distance %f, nodeStartIndex: %d, current node-size: %d", i, distance, nodeStartIndex, i - nodeStartIndex);
-				if (Abs(nodeEndIndex - nodeStartIndex - optimalNodeSize) >
-					Abs(i - nodeStartIndex) - optimalNodeSize)
-				{
-					nodeEndIndex = i;
-					nodeEndDistance = distance;
-				}
-				for (j = nodeStartIndex; j < nodeEndIndex; j++)
-				{
-					k = bestItems[j].index;
-					out->mapTuplesToNodes[k] = out->nNodes - 1;
-					out->leafTupleDatums[k]  = in->datums[k];
-				}
-				nodeStartIndex = nodeEndIndex;
-				nodeStartDistance = nodeEndDistance;
-				out->nodeLabels[out->nNodes] = Float8GetDatum(nodeStartDistance);
-				out->nNodes++;
-			}
-		}
-	}
-	for (j = nodeStartIndex; j < in->nTuples; j++)
-	{
-		k = bestItems[j].index;
-		out->mapTuplesToNodes[k] = out->nNodes - 1;
-		out->leafTupleDatums[k] = in->datums[k];
-	}
+		Datum current = in->datums[i];
+		int64_t datum_hash = DatumGetInt64(current);
+		int distance = f_hamming(datum_hash, this_node_hash);
 
+		Assert(distance >= 0);
+		Assert(distance <= 64);
+
+		out->leafTupleDatums[i]  = in->datums[i];
+		out->mapTuplesToNodes[i] = distance;
+	}
 
 	fprintf_to_ereport("out->nNodes %d", out->nNodes);
 	PG_RETURN_VOID();
