@@ -1,4 +1,4 @@
-CREATE EXTENSION vptree;
+CREATE EXTENSION bktree;
 -- Check whether any of our opclasses fail amvalidate
 SELECT amname, opcname
 FROM pg_opclass opc LEFT JOIN pg_am am ON am.oid = opcmethod

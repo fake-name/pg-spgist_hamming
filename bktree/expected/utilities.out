@@ -1,0 +1,81 @@
+-- int8 check
+-- SELECT pg_sleep(20);
+SELECT int64_to_bitstring(0);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 0000000000000000000000000000000000000000000000000000000000000000
+(1 row)
+
+SELECT int64_to_bitstring(1);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 0000000000000000000000000000000000000000000000000000000000000001
+(1 row)
+
+SELECT int64_to_bitstring(2);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 0000000000000000000000000000000000000000000000000000000000000010
+(1 row)
+
+SELECT int64_to_bitstring(-1);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 1111111111111111111111111111111111111111111111111111111111111111
+(1 row)
+
+SELECT int64_to_bitstring(-2);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 1111111111111111111111111111111111111111111111111111111111111110
+(1 row)
+
+SELECT int64_to_bitstring(9223372036854775807);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 0111111111111111111111111111111111111111111111111111111111111111
+(1 row)
+
+SELECT bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000');
+ bitstring_to_int64 
+--------------------
+                  0
+(1 row)
+
+SELECT bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000001');
+ bitstring_to_int64 
+--------------------
+                  1
+(1 row)
+
+SELECT bitstring_to_int64('0111111111111111111111111111111111111111111111111111111111111111');
+ bitstring_to_int64  
+---------------------
+ 9223372036854775807
+(1 row)
+
+SELECT bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111111');
+ bitstring_to_int64 
+--------------------
+                 -1
+(1 row)
+
+SELECT bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111110');
+ bitstring_to_int64 
+--------------------
+                 -2
+(1 row)
+
+-- We expect these to fail
+SELECT bitstring_to_int64('01111111111111111111111111111111111111111111111111111111111111110');
+ERROR:  bitstring_to_int64() input MUST be 64 characters long. Passed string length: 65
+
+SELECT bitstring_to_int64('111111111111111111111111111111111111111111111111111111111111110');
+ERROR:  bitstring_to_int64() input MUST be 64 characters long. Passed string length: 63
+
+SELECT bitstring_to_int64('11111111111111111111xx111111111111111111111111111111111111111110');
+ERROR:  bitstring_to_int64() input can only contain either '1' or '0'. Found bad char 'x' at index 20
+
+SELECT bitstring_to_int64('wat');
+ERROR:  bitstring_to_int64() input MUST be 64 characters long. Passed string length: 3
+

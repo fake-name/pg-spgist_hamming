@@ -9,6 +9,8 @@
 #include "utils/array.h"
 #include "utils/rel.h"
 
+#include "bk_tree_debug_func.h"
+
 typedef struct
 {
 	int index;
@@ -34,9 +36,6 @@ Datum bktree_leaf_consistent(PG_FUNCTION_ARGS);
 Datum bktree_area_match(PG_FUNCTION_ARGS);
 
 Datum bktree_get_distance(PG_FUNCTION_ARGS);
-
-#define fprintf_to_ereport(msg, ...)  ereport(NOTICE, (errmsg_internal(msg, ##__VA_ARGS__)))
-// #define fprintf_to_ereport(msg, ...)
 
 
 static double getDistance(Datum d1, Datum d2);
@@ -408,8 +407,8 @@ bktree_area_match(PG_FUNCTION_ARGS)
 Datum
 bktree_eq_match(PG_FUNCTION_ARGS)
 {
-	int64_t value_1 = DatumGetInt64(0);
-	int64_t value_2 = DatumGetInt64(1);
+	int64_t value_1 = DatumGetInt64(PG_GETARG_DATUM(0));
+	int64_t value_2 = DatumGetInt64(PG_GETARG_DATUM(1));
 	if (value_1 == value_2)
 		PG_RETURN_BOOL(true);
 	else
