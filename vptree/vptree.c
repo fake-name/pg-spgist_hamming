@@ -51,7 +51,7 @@ getDistance(Datum v1, Datum v2)
 	int64_t a2 = DatumGetInt64(v2);
 	int64_t diff = Abs(a1 - a2);
 
-	// fprintf_to_ereport("getDistance %ld <-> %ld : %ld", a1, a2, diff);
+	fprintf_to_ereport("getDistance %ld <-> %ld : %ld", a1, a2, diff);
 	return diff;
 }
 
@@ -308,10 +308,10 @@ vptree_picksplit(PG_FUNCTION_ARGS)
 Datum
 vptree_inner_consistent(PG_FUNCTION_ARGS)
 {
-	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
+	spgInnerConsistentIn   *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
 	Datum queryDatum;
-	double queryDistance;
+	double search_distance;
 	double distance;
 	bool isNull;
 	int		i;
@@ -321,66 +321,70 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 	out->nodeNumbers = (int *) palloc(sizeof(int) * in->nNodes);
 
 
+	if (in->nkeys > 1)
+	{
+		// Note: This does not handle multiple conditionals correctly.
+		// It treats all operators as OR, rather then AND.
+		// Doing this properly would involve taking the common set of
+		// every filter parameter, and I'm not sure how they're even
+		// specified down to the xxx_inner_consistent function (how do we delineate
+		// between the various operations, e.g. AND, OR, XOR, etc...?)
+		// As such, just abort if that's the case.
+		elog(ERROR, "This index operator cannot support multiple conditionals.");
+	}
+
 	for (i = 0; i < in->nkeys; i++)
 	{
-
-		// The argument is a instance of vptree_area
-		HeapTupleHeader query;
-
 		switch (in->scankeys[i].sk_strategy)
 		{
+			// This maps to the "<@" operator (e.g. strategy number 1) in vptree--1.0.sql
 			case RTLeftStrategyNumber:
 				// For the contained parameter, we check if the distance between the target and the current
 				// value is within the scope dictated by the filtering parameter
 				{
-					fprintf_to_ereport("Extracting arguments");
-						// The argument is a instance of vptree_area
-						HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
-						queryDatum = GetAttributeByNum(query, 1, &isNull);
-						queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+					// The argument is a instance of vptree_area
+					HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+					queryDatum    = GetAttributeByNum(query, 1, &isNull);
+					search_distance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
 
-						fprintf_to_ereport("Assert(in->hasPrefix);");
-						Assert(in->hasPrefix);
+					Assert(in->hasPrefix);
 
-						fprintf_to_ereport("calling get_distance");
-
-						distance = getDistance(in->prefixDatum, queryDatum);
-						fprintf_to_ereport("get_distance OK");
+					distance = getDistance(in->prefixDatum, queryDatum);
 
 
-						if (in->allTheSame)
-						{
-							/* Report that all nodes should be visited */
-							out->nNodes = in->nNodes;
-							for (i = 0; i < in->nNodes; i++)
-								out->nodeNumbers[i] = i;
-							PG_RETURN_VOID();
-						}
-
-						out->nNodes = 0;
+					if (in->allTheSame)
+					{
+						/* Report that all nodes should be visited */
+						out->nNodes = in->nNodes;
 						for (i = 0; i < in->nNodes; i++)
+							out->nodeNumbers[i] = i;
+						PG_RETURN_VOID();
+					}
+
+					out->nNodes = 0;
+					for (i = 0; i < in->nNodes; i++)
+					{
+						double minDistance, maxDistance;
+						bool consistent = true;
+
+						minDistance = DatumGetFloat8(in->nodeLabels[i]);
+						if (distance + search_distance < minDistance)
 						{
-							double minDistance, maxDistance;
-							bool consistent = true;
-
-							minDistance = DatumGetFloat8(in->nodeLabels[i]);
-							if (distance + queryDistance < minDistance)
-							{
-								consistent = false;
-							}
-							else if (i < in->nNodes - 1)
-							{
-								maxDistance = DatumGetFloat8(in->nodeLabels[i + 1]);
-								if (maxDistance + queryDistance <= distance)
-									consistent = false;
-							}
-
-							if (consistent)
-							{
-								out->nodeNumbers[out->nNodes] = i;
-								out->nNodes++;
-							}
+							consistent = false;
 						}
+						else if (i < in->nNodes - 1)
+						{
+							maxDistance = DatumGetFloat8(in->nodeLabels[i + 1]);
+							if (maxDistance + search_distance <= distance)
+								consistent = false;
+						}
+
+						if (consistent)
+						{
+							out->nodeNumbers[out->nNodes] = i;
+							out->nNodes++;
+						}
+					}
 				}
 				break;
 
@@ -407,10 +411,15 @@ vptree_inner_consistent(PG_FUNCTION_ARGS)
 Datum
 vptree_leaf_consistent(PG_FUNCTION_ARGS)
 {
+	/*
+	The SP-GiST tree can only contain actual values in leaf nodes, the intermediate
+	nodes are just pointer sets.
+
+	This function basically checks if a specific leaf node matches the relevant
+	query parameter, and returns if so as a boolean.
+	*/
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);
-	// HeapTupleHeader query = DatumGetHeapTupleHeader(in->query);
-
 
 	double distance;
 	bool		res;
@@ -424,8 +433,6 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 
 	for (i = 0; i < in->nkeys; i++)
 	{
-		// The argument is a instance of vptree_area
-		HeapTupleHeader query;
 
 		switch (in->scankeys[i].sk_strategy)
 		{
@@ -433,7 +440,8 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 				// For the contained parameter, we check if the distance between the target and the current
 				// value is within the scope dictated by the filtering parameter
 				{
-
+					// The argument is a instance of vptree_area
+					HeapTupleHeader query;
 					Datum queryDatum;
 					double queryDistance;
 					bool isNull;
@@ -475,7 +483,12 @@ vptree_leaf_consistent(PG_FUNCTION_ARGS)
 Datum
 vptree_area_match(PG_FUNCTION_ARGS)
 {
-	Datum value = PG_GETARG_DATUM(0);
+	/*
+	Given a value and a vptree_area criterial, check if the value is within the
+	vptree_area.
+	Mostly for convenience.
+	*/
+	Datum           value = PG_GETARG_DATUM(0);
 	HeapTupleHeader query = PG_GETARG_HEAPTUPLEHEADER(1);
 	Datum queryDatum;
 	double queryDistance;
@@ -496,8 +509,15 @@ vptree_area_match(PG_FUNCTION_ARGS)
 Datum
 vptree_eq_match(PG_FUNCTION_ARGS)
 {
-	int64_t value_1 = DatumGetInt64(0);
-	int64_t value_2 = DatumGetInt64(1);
+	/*
+	Equality operator for the index, since amvalidate() complains if
+	we don't have one.
+	I'm not sure why we can't just use the underlying int64 equality operator,
+	probably the issue is I just don't know how to tell the index to use
+	it correctly.
+	*/
+	int64_t value_1 = DatumGetInt64(PG_GETARG_DATUM(0));
+	int64_t value_2 = DatumGetInt64(PG_GETARG_DATUM(1));
 	if (value_1 == value_2)
 		PG_RETURN_BOOL(true);
 	else
@@ -507,5 +527,9 @@ vptree_eq_match(PG_FUNCTION_ARGS)
 Datum
 vptree_get_distance(PG_FUNCTION_ARGS)
 {
+	/*
+	Expose the distance operator to user-code, because it's nice to
+	have access to it.
+	*/
 	PG_RETURN_FLOAT8(getDistance(PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 }
