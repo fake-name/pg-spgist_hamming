@@ -66,6 +66,80 @@ SELECT bitstring_to_int64('11111111111111111111111111111111111111111111111111111
                  -2
 (1 row)
 
+-- Check function round-tripping
+-- Annoying casting is because I haven't figured out how to return an instance of "text" from a c function
+-- Mostly because it works as is, and it's not critical.
+SELECT int64_to_bitstring(bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000'))::text
+	= '0000000000000000000000000000000000000000000000000000000000000000'::text;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT int64_to_bitstring(bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000001'))::text
+	= '0000000000000000000000000000000000000000000000000000000000000001'::text;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT int64_to_bitstring(bitstring_to_int64('0111111111111111111111111111111111111111111111111111111111111111'))::text
+	= '0111111111111111111111111111111111111111111111111111111111111111'::text;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT int64_to_bitstring(bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111111'))::text
+	= '1111111111111111111111111111111111111111111111111111111111111111'::text;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT int64_to_bitstring(bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111110'))::text
+	= '1111111111111111111111111111111111111111111111111111111111111110'::text;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bitstring_to_int64(int64_to_bitstring(0)) = 0;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bitstring_to_int64(int64_to_bitstring(1)) = 1;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bitstring_to_int64(int64_to_bitstring(2)) = 2;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bitstring_to_int64(int64_to_bitstring(-1)) = -1;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bitstring_to_int64(int64_to_bitstring(-2)) = -2;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bitstring_to_int64(int64_to_bitstring(9223372036854775807)) = 9223372036854775807;
+ ?column? 
+----------
+ t
+(1 row)
+
 -- We expect these to fail
 SELECT bitstring_to_int64('01111111111111111111111111111111111111111111111111111111111111110');
 ERROR:  bitstring_to_int64() input MUST be 64 characters long. Passed string length: 65
@@ -78,4 +152,129 @@ ERROR:  bitstring_to_int64() input can only contain either '1' or '0'. Found bad
 
 SELECT bitstring_to_int64('wat');
 ERROR:  bitstring_to_int64() input MUST be 64 characters long. Passed string length: 3
+
+-- Validate the hamming distance operator
+-- A lot of this is trying to break anything that depends on the
+-- sign bit when it shouldn't. Some of it is just silly, some of
+-- it tries to validate the minimum and maximum distances.
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+;
+NOTICE:  f_hamming(0 <-> 0): 0
+ ?column? 
+----------
+        0
+(1 row)
+
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000001')
+;
+NOTICE:  f_hamming(0 <-> 1): 1
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('1000000000000000000000000000000000000000000000000000000000000000')
+;
+NOTICE:  f_hamming(0 <-> -9223372036854775808): 1
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT
+		bitstring_to_int64('1000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('1000000000000000000000000000000000000000000000000000000000000000')
+;
+NOTICE:  f_hamming(-9223372036854775808 <-> -9223372036854775808): 0
+ ?column? 
+----------
+        0
+(1 row)
+
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('1000000000000000000000000000000000000000000000000000000000000001')
+;
+NOTICE:  f_hamming(0 <-> -9223372036854775807): 2
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000011')
+;
+NOTICE:  f_hamming(0 <-> 3): 2
+ ?column? 
+----------
+        2
+(1 row)
+
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('0111111111111111111111111111111111111111111111111111111111111111')
+;
+NOTICE:  f_hamming(0 <-> 9223372036854775807): 63
+ ?column? 
+----------
+       63
+(1 row)
+
+SELECT
+		bitstring_to_int64('0000000000000000000000000000000000000000000000000000000000000000')
+	<->
+		bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111111')
+;
+NOTICE:  f_hamming(0 <-> -1): 64
+ ?column? 
+----------
+       64
+(1 row)
+
+SELECT
+		bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111110')
+	<->
+		bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111111')
+;
+NOTICE:  f_hamming(-2 <-> -1): 1
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT
+		bitstring_to_int64('0111111111111111111111111111111111111111111111111111111111111111')
+	<->
+		bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111111')
+;
+NOTICE:  f_hamming(9223372036854775807 <-> -1): 1
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT
+		bitstring_to_int64('0111111111111111111111111111111111111111111111111111111111111110')
+	<->
+		bitstring_to_int64('1111111111111111111111111111111111111111111111111111111111111111')
+;
+NOTICE:  f_hamming(9223372036854775806 <-> -1): 2
+ ?column? 
+----------
+        2
+(1 row)
 

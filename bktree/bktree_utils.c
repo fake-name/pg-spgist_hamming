@@ -29,7 +29,17 @@ Datum bitstring_to_int64(PG_FUNCTION_ARGS);
 Datum
 int64_to_bitstring(PG_FUNCTION_ARGS)
 {
+	/*
+	Convenience function, mostly for debugging.
 
+	Takes a single in64, and returns a literal ascii string
+	containing a binary representation of the passed value,
+	e.g. "0111010001010....".
+
+	This function properly handles 2's complement, so
+	negative values will work properly.
+
+	*/
 
 	StringInfoData buf;
 	int			i;
@@ -54,6 +64,20 @@ int64_to_bitstring(PG_FUNCTION_ARGS)
 Datum
 bitstring_to_int64(PG_FUNCTION_ARGS)
 {
+	/*
+	Convenience function, mostly for debugging.
+
+	Takes a single literal ascii string that is 64 characters
+	long, and consists of the literal representation of
+	a 64-bit integer (e.g. "0111010001010...."), and
+	returns an int64 that corresponds to the passed
+	binary literal.
+
+	Note that the returned value is signed, so if the MSB
+	of the passed string is "1", the return value will
+	be negative.
+
+	*/
 
 	char* arg;
 	uint64_t ret = 0;

@@ -4,7 +4,7 @@
 CREATE TYPE bktree_area AS
 (
 	center   int8,
-	distance float8
+	distance int8
 );
 
 CREATE OR REPLACE FUNCTION bktree_area_match(int8, bktree_area) RETURNS boolean AS
@@ -15,9 +15,6 @@ CREATE OR REPLACE FUNCTION bktree_eq_match(int8, int8) RETURNS boolean AS
 'MODULE_PATHNAME','bktree_eq_match'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION bktree_get_distance(int8, int8) RETURNS int8 AS
-'MODULE_PATHNAME','bktree_get_distance'
-LANGUAGE C IMMUTABLE STRICT;
 
 CREATE OPERATOR <@ (
 	LEFTARG = int8,
@@ -32,13 +29,6 @@ CREATE OPERATOR = (
 	PROCEDURE = bktree_eq_match,
 	RESTRICT = contsel,
 	JOIN = contjoinsel);
-
--- Utility operator for accessing the distance mechanism.
-CREATE OPERATOR <-> (
-	LEFTARG = int8,
-	RIGHTARG = int8,
-	PROCEDURE = bktree_get_distance
-	);
 
 CREATE OR REPLACE FUNCTION bktree_config(internal, internal) RETURNS void AS
 'MODULE_PATHNAME','bktree_config'
@@ -72,6 +62,7 @@ CREATE OPERATOR CLASS bktree_ops
 
 -- Utility functions
 
+
 CREATE OR REPLACE FUNCTION int64_to_bitstring(int8) RETURNS cstring AS
 'MODULE_PATHNAME','int64_to_bitstring'
 LANGUAGE C IMMUTABLE STRICT;
@@ -79,3 +70,16 @@ LANGUAGE C IMMUTABLE STRICT;
 CREATE OR REPLACE FUNCTION bitstring_to_int64(cstring) RETURNS int8 AS
 'MODULE_PATHNAME','bitstring_to_int64'
 LANGUAGE C IMMUTABLE STRICT;
+
+
+-- Convenience operator for accessing the distance mechanism.
+
+CREATE OR REPLACE FUNCTION bktree_get_distance(int8, int8) RETURNS int8 AS
+'MODULE_PATHNAME','bktree_get_distance'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE OPERATOR <-> (
+	LEFTARG = int8,
+	RIGHTARG = int8,
+	PROCEDURE = bktree_get_distance
+	);
