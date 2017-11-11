@@ -89,7 +89,7 @@ bitstring_to_int64(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("bitstring_to_int64() input MUST be 64 characters long. Passed string length: %d\n",
+				 errmsg("bitstring_to_int64() input MUST be 64 characters long. Passed string length: %ld\n",
 						strlen(arg))));
 	}
 	for (idx = 0; idx < BITSTRING_LEN_BITS; idx += 1)

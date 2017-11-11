@@ -107,7 +107,6 @@ bktree_picksplit(PG_FUNCTION_ARGS)
 {
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
-	Datum tmp;
 	int i;
 
 	// Since the concept of "best" isn't really a thing with BK-trees,
@@ -123,7 +122,7 @@ bktree_picksplit(PG_FUNCTION_ARGS)
 
 	out->hasPrefix = true;
 	out->prefixDatum = in->datums[bestIndex];
-	fprintf_to_ereport("Get data value: %ld, %ld, %ld", DatumGetInt64(in->datums[bestIndex]), tmp, out->prefixDatum);
+	fprintf_to_ereport("Get data value: %ld, %ld", DatumGetInt64(in->datums[bestIndex]), out->prefixDatum);
 
 	out->mapTuplesToNodes = palloc(sizeof(int)   * in->nTuples);
 	out->leafTupleDatums  = palloc(sizeof(Datum) * in->nTuples);
