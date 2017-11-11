@@ -32,9 +32,8 @@ Datum bktree_area_match(PG_FUNCTION_ARGS);
 Datum bktree_get_distance(PG_FUNCTION_ARGS);
 
 
-static int picksplitDistanceItemCmp(const void *v1, const void *v2);
-PicksplitDistanceItem *getSplitParams(spgPickSplitIn *in, int splitIndex, int64_t *val1, int64_t *val2);
-
+#define int_min(a, b) (((a) < (b)) ? (a) : (b))
+#define int_max(a, b) (((a) > (b)) ? (a) : (b))
 
 static int64_t
 f_hamming(int64_t a_int, int64_t b_int)
@@ -58,19 +57,6 @@ f_hamming(int64_t a_int, int64_t b_int)
 
 }
 
-static int
-picksplitDistanceItemCmp(const void *v1, const void *v2)
-{
-	const PicksplitDistanceItem *i1 = (const PicksplitDistanceItem *)v1;
-	const PicksplitDistanceItem *i2 = (const PicksplitDistanceItem *)v2;
-
-	if (i1->distance < i2->distance)
-		return -1;
-	else if (i1->distance == i2->distance)
-		return 0;
-	else
-		return 1;
-}
 
 Datum
 bktree_config(PG_FUNCTION_ARGS)
@@ -78,8 +64,8 @@ bktree_config(PG_FUNCTION_ARGS)
 	/* spgConfigIn *cfgin = (spgConfigIn *) PG_GETARG_POINTER(0); */
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	cfg->prefixType    = POINTOID;
-	cfg->labelType     = FLOAT8OID;	/* we don't need node labels */
+	cfg->prefixType    = INT8OID;
+	cfg->labelType     = INT8OID;	/* we don't need node labels */
 	cfg->canReturnData = true;
 	cfg->longValuesOK  = false;
 	PG_RETURN_VOID();
@@ -91,7 +77,6 @@ bktree_choose(PG_FUNCTION_ARGS)
 	spgChooseIn   *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	int64_t distance;
-	int i;
 
 	out->resultType = spgMatchNode;
 	out->result.matchNode.levelAdd  = 0;
@@ -103,18 +88,15 @@ bktree_choose(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
+	Assert(in->nNodes == 65);
 	Assert(in->hasPrefix);
 
 	distance = f_hamming(DatumGetInt64(in->prefixDatum), DatumGetInt64(in->datum));
-	out->result.matchNode.nodeN = in->nNodes - 1;
-	for (i = 1; i < in->nNodes; i++)
-	{
-		if (distance < DatumGetInt64(in->nodeLabels[i]))
-		{
-			out->result.matchNode.nodeN = i - 1;
-			break;
-		}
-	}
+	Assert(distance >= 0);
+	Assert(distance <= 64);
+
+	// The new node gets slotted into the child with the appropriate distance
+	out->result.matchNode.nodeN = distance;
 
 	PG_RETURN_VOID();
 }
@@ -131,12 +113,13 @@ bktree_picksplit(PG_FUNCTION_ARGS)
 	// Since the concept of "best" isn't really a thing with BK-trees,
 	// we just pick one of the input nodes at random to assign as the node
 	// hash, against which to sort the child items.
+	//
 	// TODO: Rewrite this to chose the input datum
 	//       that produces the most child-node branches.
 	int bestIndex = in->nTuples / 2;
 	int64_t this_node_hash = DatumGetInt64(in->datums[bestIndex]);
 
-	fprintf_to_ereport("bktree_picksplit across %d tuples, with child-node count of %d, on value %016x", in->nTuples, bestIndex, this_node_hash);
+	fprintf_to_ereport("bktree_picksplit across %d tuples, with child-node count of %d (bestindex %d), on value %016x", in->nTuples, in->nTuples, bestIndex, this_node_hash);
 
 	out->hasPrefix = true;
 	out->prefixDatum = in->datums[bestIndex];
@@ -176,7 +159,7 @@ bktree_inner_consistent(PG_FUNCTION_ARGS)
 {
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
-	Datum queryDatum;
+	int64_t queryTargetValue;
 	int64_t queryDistance;
 	int64_t distance;
 	bool isNull;
@@ -192,40 +175,70 @@ bktree_inner_consistent(PG_FUNCTION_ARGS)
 	// I don't know if this is zeroed automatically
 	out->nNodes = 0;
 
+
+	if (in->allTheSame)
+	{
+		fprintf_to_ereport("in->allTheSame is true");
+		/* Report that all nodes should be visited */
+		out->nNodes = in->nNodes;
+		for (i = 0; i < in->nNodes; i++)
+			out->nodeNumbers[i] = i;
+		PG_RETURN_VOID();
+	}
+
 	for (i = 0; i < in->nkeys; i++)
 	{
-		// The argument is a instance of bktree_area
-		HeapTupleHeader query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
-		queryDatum = GetAttributeByNum(query, 1, &isNull);
-		queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
-
-		Assert(in->hasPrefix);
-
-		distance = f_hamming(DatumGetInt64(in->prefixDatum), DatumGetInt64(queryDatum));
-		// We want to proceed down into child-nodes that are at distances
-		// hamming(search_hash, node_hash) - search distance -> hamming(search_hash, node_hash) + search distance
-		// from the current node.
-		// As such, we only need to perform one distance op, and just report to search
-		// the relevant nodes.
-
-		if (in->allTheSame)
+		HeapTupleHeader query;
+		switch (in->scankeys[i].sk_strategy)
 		{
-			/* Report that all nodes should be visited */
-			out->nNodes = in->nNodes;
-			for (i = 0; i < in->nNodes; i++)
-				out->nodeNumbers[i] = i;
-			PG_RETURN_VOID();
-		}
+			case RTLeftStrategyNumber:
+				// The argument is a instance of bktree_area
+				query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
+				queryTargetValue = DatumGetInt64(GetAttributeByNum(query, 1, &isNull));
+				queryDistance = DatumGetInt64(GetAttributeByNum(query, 2, &isNull));
 
-		out->nNodes = 0;
 
-		minDistance = max(distance-queryDistance,  0);
-		maxDistance = min(distance+queryDistance, 64);
+				Assert(in->hasPrefix);
 
-		for (i = minDistance; i < maxDistance; i++)
-		{
-			out->nNodes++;
-			out->nodeNumbers[out->nNodes] = i;
+				distance = f_hamming(DatumGetInt64(in->prefixDatum), queryTargetValue);
+
+				fprintf_to_ereport("RTLeftStrategyNumber search for %ld with distance of %ld", queryTargetValue, queryDistance);
+				fprintf_to_ereport("Nodes: current %016x, target %016x, distance %d", DatumGetInt64(in->prefixDatum), queryTargetValue, distance);
+
+				// We want to proceed down into child-nodes that are at distances
+				// hamming(search_hash, node_hash) - search distance -> hamming(search_hash, node_hash) + search distance
+				// from the current node.
+				// As such, we only need to perform one distance op, and just report to search
+				// the relevant nodes.
+
+				Assert(distance >= 0);
+				Assert(distance <= 64);
+
+				minDistance = int_max(distance-queryDistance,  0);
+				maxDistance = int_min(distance+queryDistance, 64);
+
+				for (i = minDistance; i <= maxDistance; i++)
+				{
+
+					fprintf_to_ereport("Out Nodes: %d, inserting node number %d", out->nNodes, i);
+					out->nodeNumbers[out->nNodes] = i;
+					out->nNodes++;
+				}
+				break;
+
+			case RTOverLeftStrategyNumber:
+				// With a search distance of 0, we just
+				// calculate the node->child object distance, and return the node
+				// at that distance.
+				fprintf_to_ereport("bktree_inner_consistent RTEqualStrategyNumber");
+				distance = f_hamming(DatumGetInt64(in->prefixDatum), DatumGetInt64(in->scankeys[i].sk_argument));
+
+				out->nNodes++;
+				out->nodeNumbers[out->nNodes] = distance;
+
+			default:
+				elog(ERROR, "unrecognized strategy number: %d", in->scankeys[i].sk_strategy);
+				break;
 		}
 	}
 	PG_RETURN_VOID();
@@ -262,17 +275,19 @@ bktree_leaf_consistent(PG_FUNCTION_ARGS)
 				// value is within the scope dictated by the filtering parameter
 				{
 
-					Datum queryDatum;
+					int64_t queryHash;
 					int64_t queryDistance;
 					bool isNull;
 
-					fprintf_to_ereport("bktree_inner_consistent RTContainedByStrategyNumber");
 
 					query = DatumGetHeapTupleHeader(in->scankeys[i].sk_argument);
-					queryDatum = GetAttributeByNum(query, 1, &isNull);
-					queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+					queryHash = DatumGetInt64(GetAttributeByNum(query, 1, &isNull));
+					queryDistance = DatumGetInt64(GetAttributeByNum(query, 2, &isNull));
 
-					distance = f_hamming(DatumGetInt64(in->leafDatum), DatumGetInt64(queryDatum));
+					distance = f_hamming(DatumGetInt64(in->leafDatum), queryHash);
+
+					fprintf_to_ereport("bktree_leaf_consistent RTContainedByStrategyNumber");
+					fprintf_to_ereport("Searching for %ld with distance %ld, current node %ld, distance %d", queryHash, queryDistance, DatumGetInt64(in->leafDatum), distance);
 
 					res = (distance <= queryDistance);
 				}
@@ -282,7 +297,7 @@ bktree_leaf_consistent(PG_FUNCTION_ARGS)
 				// For the equal operator, the two parameters are both int8,
 				// so we just get the distance, and check if it's zero
 
-					fprintf_to_ereport("bktree_inner_consistent RTEqualStrategyNumber");
+				fprintf_to_ereport("bktree_leaf_consistent RTEqualStrategyNumber");
 				distance = f_hamming(DatumGetInt64(in->leafDatum), DatumGetInt64(in->scankeys[i].sk_argument));
 				res = (distance == 0);
 				break;
@@ -311,7 +326,7 @@ bktree_area_match(PG_FUNCTION_ARGS)
 	bool isNull;
 
 	queryDatum = GetAttributeByNum(query, 1, &isNull);
-	queryDistance = DatumGetFloat8(GetAttributeByNum(query, 2, &isNull));
+	queryDistance = DatumGetInt64(GetAttributeByNum(query, 2, &isNull));
 
 	distance = f_hamming(DatumGetInt64(value), DatumGetInt64(queryDatum));
 

@@ -6,7 +6,7 @@ OBJS = bktree.o bktree_utils.o
 EXTENSION = bktree
 DATA = bktree--1.0.sql
 
-REGRESS = init test_1 int8 utilities
+REGRESS = init utilities test_1 test_2 int8
 # REGRESS = init int8 int8_2 # not_equal
 
 
