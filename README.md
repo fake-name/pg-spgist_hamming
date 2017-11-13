@@ -56,6 +56,6 @@ here. My test system has 32 GB of ram, and the C++ BK-Tree implementation alone 
 ~18 GB to contain the entire dataset.
 
 
-[1] : http://blog.notdot.net/2007/4/Damn-Cool-Algorithms-Part-1-BK-Trees
-[2] : https://github.com/fake-name/IntraArchiveDeduplicator/blob/92da07a75928b803a23d0e2940c40013da8ea115/deduplicator/bktree.hpp
-[3] : https://github.com/fake-name/IntraArchiveDeduplicator/tree/master/Tests
+[1] : http://blog.notdot.net/2007/4/Damn-Cool-Algorithms-Part-1-BK-Trees  
+[2] : https://github.com/fake-name/IntraArchiveDeduplicator/blob/92da07a75928b803a23d0e2940c40013da8ea115/deduplicator/bktree.hpp  
+[3] : https://github.com/fake-name/IntraArchiveDeduplicator/tree/master/Tests  
