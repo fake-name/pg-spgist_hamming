@@ -1,6 +1,8 @@
 pg-spgist_hamming
 ==============
 
+Tested on PostgreSQL 9.6 and 11 
+
 This repository contains two SP-GiST index extensions.
 
 Principally, they detail my progress while implementing a [BK-Tree][1] as a native
