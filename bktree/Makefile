@@ -13,7 +13,7 @@ REGRESS = init utilities test_1 test_2 int8
 PGFILEDESC = "bktree - Viewpoint Tree GiST Index operator"
 
 
-ifdef USE_PGXS
+ifndef DO_NOT_USE_PGXS
 	PG_CONFIG = pg_config
 	PGXS := $(shell $(PG_CONFIG) --pgxs)
 	include $(PGXS)
