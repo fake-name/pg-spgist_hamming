@@ -61,3 +61,37 @@ here. My test system has 32 GB of ram, and the C++ BK-Tree implementation alone 
 [1] : http://blog.notdot.net/2007/4/Damn-Cool-Algorithms-Part-1-BK-Trees  
 [2] : https://github.com/fake-name/IntraArchiveDeduplicator/blob/92da07a75928b803a23d0e2940c40013da8ea115/deduplicator/bktree.hpp  
 [3] : https://github.com/fake-name/IntraArchiveDeduplicator/tree/master/Tests  
+
+------
+
+Quickstart:
+
+This module has a simple makefile that uses `pg_config` to do it's magic. Check you have the `pg_config` shell command, and that it's output looks reasonable.
+
+If you do, installing is a two steps:
+
+```
+cd bktree
+make
+sudo make install
+sudo make installcheck   # to run tests that check everything installed correctly.
+```
+
+Note that installcheck currently fails on postgresql 11, due to minor changes in the output of `EXPLAIN ANALYZE`. The extension works correctly, but the tests work by `diff`ing the output of queries executed via `psql`, so minor changes in the output formatting can produce false breakages.
+
+
+
+Once you have it installed:
+
+
+```
+CREATE INDEX bk_index_name ON table_name USING spgist (phash_column bktree_ops);
+
+SELECT <columns here> FROM table_name WHERE phash_column <@ (target_phash_int64, search_distance_int);
+```
+
+You'll need to replace things like `bk_index_name`, `table_name`, `target_phash_int64`, `search_distance_int`, 
+and `phash_column` with appropriate values for your database.
+
+`phash_column` must be a column of type `bigint`. Currently, only 64-bit phash values are supported, and they're 
+stored in signed format. 
