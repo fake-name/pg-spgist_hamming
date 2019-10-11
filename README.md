@@ -77,7 +77,7 @@ sudo make install
 sudo make installcheck   # to run tests that check everything installed correctly.
 ```
 
-Note that installcheck currently fails on postgresql 11, due to minor changes in the output of `EXPLAIN ANALYZE`. The extension works correctly, but the tests work by `diff`ing the output of queries executed via `psql`, so minor changes in the output formatting can produce false breakages.
+Note that installcheck currently fails on postgresql not 9.5, due to minor changes in the output of `EXPLAIN ANALYZE`. The extension works correctly, but the tests work by `diff`ing the output of queries executed via `psql`, so minor changes in the output formatting can produce false breakages.
 
 
 
@@ -85,8 +85,15 @@ Once you have it installed:
 
 
 ```
+# Enable extension in current database (Note: This is per-database, so if you want to use it on 
+# multiple DBs, you'll have to enable it in each.
+CREATE EXTENSION bktree;
+
+# Use the enabled extension to create an index. 
+# phash_column MUST be a int64 ("bigint") type.
 CREATE INDEX bk_index_name ON table_name USING spgist (phash_column bktree_ops);
 
+# Query across the table within a specified edit distance.
 SELECT <columns here> FROM table_name WHERE phash_column <@ (target_phash_int64, search_distance_int);
 ```
 
